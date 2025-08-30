@@ -7,19 +7,25 @@
     "dist"
   ],
   "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
+      "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./type": {
+      "types": "./dist/type/index.d.ts",
+      "import": "./dist/type/index.js",
+      "require": "./dist/type/index.cjs"
     }
   },
   "sideEffects": false,
   "scripts": {
     "dev": "tsup --watch",
     "build": "tsup",
+    "prepare": "npm run build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier -w .",
