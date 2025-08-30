@@ -1,8 +1,4 @@
-import axios, {
-  type AxiosInstance,
-  AxiosError,
-  type AxiosRequestConfig,
-} from "axios";
+import axios, { type AxiosInstance, AxiosError, type AxiosRequestConfig } from "axios";
 
 import { LineWebError, LineWebErrorCode } from "./errors";
 import type { FlexContainer } from "@line/bot-sdk";
@@ -22,28 +18,39 @@ interface Cookie {
 }
 
 export class LineWeb {
-  private cookies: string;
+  public cookies: string;
   private axiosInstance!: AxiosInstance;
-  public readonly userAgent =
+  private isExternalAxios = false;
+  public userAgent =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36";
-  public readonly clientVersion = "20240513144702";
-  private lineWebChatIdLength = 33;
-  private lineWebBotIdLength = 33;
-  private lineWebUserIdLength = 33;
+  public clientVersion = "20240513144702";
+  public lineWebChatIdLength = 33;
+  public lineWebBotIdLength = 33;
+  public lineWebUserIdLength = 33;
 
-  constructor(options: { cookies: string }) {
+  constructor(options: { cookies: string; axios?: AxiosInstance; axiosConfig?: AxiosRequestConfig }) {
     this.cookies = this.parseCookies(options.cookies);
-    this.initAxiosInstance();
+    if (options.axios) {
+      this.axiosInstance = options.axios;
+      this.isExternalAxios = true;
+    } else {
+      this.initAxiosInstance(options.axiosConfig);
+    }
   }
 
-  private initAxiosInstance(): void {
+  private initAxiosInstance(config?: AxiosRequestConfig): void {
+    // Create an internal axios instance. Default headers are also injected per-request,
+    // but we keep sensible defaults here for backward compatibility.
     this.axiosInstance = axios.create({
+      ...(config ?? {}),
       headers: {
         "User-Agent": this.userAgent,
         "x-oa-chat-client-version": this.clientVersion,
         Cookie: this.cookies,
+        ...(config?.headers ?? {}),
       },
     });
+    this.isExternalAxios = false;
   }
 
   private parseCookies(cookies: string): string {
@@ -52,13 +59,9 @@ export class LineWeb {
         domain?: string;
       })[];
       const filteredCookies = parsedCookies.filter(
-        (cookie) =>
-          typeof cookie.domain === "string" &&
-          cookie.domain.includes("line.biz")
+        (cookie) => typeof cookie.domain === "string" && cookie.domain.includes("line.biz"),
       );
-      return filteredCookies
-        .map((cookie: Cookie) => `${cookie.name}=${cookie.value}`)
-        .join("; ");
+      return filteredCookies.map((cookie: Cookie) => `${cookie.name}=${cookie.value}`).join("; ");
     } catch {
       throw new LineWebError({
         code: LineWebErrorCode.INVALID_COOKIE,
@@ -69,7 +72,11 @@ export class LineWeb {
 
   public setCookies(cookies: string) {
     this.cookies = this.parseCookies(cookies);
-    this.initAxiosInstance();
+    // If using an internal axios instance, refresh headers on it. For external instances,
+    // we do not replace the instance; default headers will be injected per request.
+    if (!this.isExternalAxios) {
+      this.initAxiosInstance();
+    }
   }
 
   public getAxiosInstance(): AxiosInstance {
@@ -260,8 +267,7 @@ export class LineWeb {
         if (!/^[0-9a-fA-F-]{36}$/.test(id)) {
           throw new LineWebError({
             code: LineWebErrorCode.INVALID_PARAMETER,
-            message:
-              "bizId must be a valid UUID (36 characters, hex and dashes).",
+            message: "bizId must be a valid UUID (36 characters, hex and dashes).",
           });
         }
         if (id.length !== 36) {
@@ -344,10 +350,7 @@ export class LineWeb {
 
   private handleAxiosError(error: unknown | AxiosError) {
     if (axios.isAxiosError(error)) {
-      if (
-        error.response?.status === 401 &&
-        error.response?.data?.code === "not_login"
-      ) {
+      if (error.response?.status === 401 && error.response?.data?.code === "not_login") {
         throw new LineWebError({
           code: LineWebErrorCode.EXPIRED_COOKIE,
           message: "Cookies have expired or are not logged in.",
@@ -375,14 +378,18 @@ export class LineWeb {
     }
   }
 
-  private async request<T>(
-    config: AxiosRequestConfig,
-    message: string,
-  ): Promise<T> {
+  private async request<T>(config: AxiosRequestConfig, message: string): Promise<T> {
     try {
+      const defaultHeaders = {
+        "User-Agent": this.userAgent,
+        "x-oa-chat-client-version": this.clientVersion,
+        Cookie: this.cookies,
+        "Content-Type": "application/json",
+      } as Record<string, string>;
+
       const response = await this.axiosInstance.request<T>({
-        headers: { "Content-Type": "application/json", ...(config.headers ?? {}) },
         ...config,
+        headers: { ...defaultHeaders, ...(config.headers ?? {}) },
       });
       return response.data;
     } catch (error: unknown | AxiosError) {
@@ -392,6 +399,29 @@ export class LineWeb {
         message,
         cause: error,
       });
+    }
+  }
+
+  // Allow users to inject a custom Axios instance after construction
+  public setAxiosInstance(instance: AxiosInstance): void {
+    this.axiosInstance = instance;
+    this.isExternalAxios = true;
+  }
+
+  // Allow users to configure the current axios instance defaults from outside the class
+  public updateAxiosConfig(config: AxiosRequestConfig): void {
+    if (!this.axiosInstance) {
+      this.initAxiosInstance(config);
+      return;
+    }
+    // Update defaults on the existing instance to preserve interceptors
+    Object.assign(this.axiosInstance.defaults, config);
+    if (config.headers) {
+      // Ensure headers merge without losing existing defaults
+      this.axiosInstance.defaults.headers = {
+        ...(this.axiosInstance.defaults.headers as any),
+        ...(config.headers as any),
+      } as any;
     }
   }
 
@@ -460,10 +490,7 @@ export class LineWeb {
 
       do {
         const url = API_URL(limitPerPage, next);
-        const data = await this.request<BotsList>(
-          { url, method: "get" },
-          "Failed to fetch bots",
-        );
+        const data = await this.request<BotsList>({ url, method: "get" }, "Failed to fetch bots");
         allBot = [...allBot, ...data.list];
         next = data.next;
         pageCount++;
@@ -489,10 +516,7 @@ export class LineWeb {
     const API_URL =
       `https://chat.line.biz/api/v1/bots/${webBotId}/owners` +
       (bizIds ? `?bizIds=${bizIds.join(",")}` : "");
-    return this.request<OwnersResponse>(
-      { url: API_URL, method: "get" },
-      "Failed to fetch owners",
-    );
+    return this.request<OwnersResponse>({ url: API_URL, method: "get" }, "Failed to fetch owners");
   }
 
   public async getTags({
@@ -506,10 +530,7 @@ export class LineWeb {
     const API_URL =
       `https://chat.line.biz/api/v1/bots/${webBotId}/tags` +
       (tagIds ? `?tagIds=${tagIds.join(",")}` : "");
-    return this.request<TagsResponse>(
-      { url: API_URL, method: "get" },
-      "Failed to fetch tags",
-    );
+    return this.request<TagsResponse>({ url: API_URL, method: "get" }, "Failed to fetch tags");
   }
 
   /**
@@ -545,11 +566,7 @@ export class LineWeb {
         message: `Invalid limitPerPage value (must be between 1 and 25). Received: ${limitPerPage}`,
       });
     }
-    function API_URL(
-      _webBotId: string,
-      _limitPerPage: number,
-      _nextToken?: string,
-    ) {
+    function API_URL(_webBotId: string, _limitPerPage: number, _nextToken?: string) {
       const baseUrl = `https://chat.line.biz/api/v2/bots/${_webBotId}/chats?folderType=ALL&tagIds=&autoTagIds=&limit=${_limitPerPage}&prioritizePinnedChat=true`;
       return _nextToken ? `${baseUrl}&next=${_nextToken}` : baseUrl;
     }
@@ -605,11 +622,7 @@ export class LineWeb {
     backwardToken?: string;
   }): Promise<MessagesResponse> {
     this.validParamsType({ webBotId, webChatId, maxPages, backwardToken });
-    function API_URL(
-      _webBotId: string,
-      _webChatId: string,
-      _backward?: string,
-    ) {
+    function API_URL(_webBotId: string, _webChatId: string, _backward?: string) {
       const baseUrl = `https://chat.line.biz/api/v3/bots/${_webBotId}/chats/${_webChatId}/messages`;
       return _backward ? `${baseUrl}?backward=${_backward}` : baseUrl;
     }
@@ -680,14 +693,7 @@ export class LineWeb {
     let pageCount = 0;
 
     do {
-      const url = API_URL(
-        webBotId,
-        encodedChatName,
-        filterKey,
-        limitPerPage,
-        sortKey,
-        sortOrder,
-      );
+      const url = API_URL(webBotId, encodedChatName, filterKey, limitPerPage, sortKey, sortOrder);
       const data = await this.request<ContactResponse>(
         { url, method: "get" },
         "Failed to fetch contacts",
@@ -703,77 +709,6 @@ export class LineWeb {
 
     return { list: allContact, next };
   }
-
-  // public async sendFile(
-  //   webBotId: string,
-  //   webChatId: string,
-  //   file: File,
-  // ): Promise<MessageEventType> {
-  //   function API_URL_UPLOADFILE(webBotId: string, webChatId: string) {
-  //     return `https://chat.line.biz/api/v1/bots/${webBotId}/chats/${webChatId}/messages/uploadFile`;
-  //   }
-  //   function API_URL_SENDMESSAGE(webBotId: string, webChatId: string) {
-  //     return `https://chat.line.biz/api/v1/bots/${webBotId}/chats/${webChatId}/messages/bulkSendFiles`;
-  //   }
-
-  //   const urlUploadFile = API_URL_UPLOADFILE(webBotId, webChatId);
-  //   const urlBulkSendFiles = API_URL_SENDMESSAGE(webBotId, webChatId);
-
-  //   const formData = new FormData();
-
-  //   // // Encode the filename to handle special characters or non-ASCII characters
-  //   // const encodedFile = new File([file], encodeURIComponent(file.name), {
-  //   //   type: file.type,
-  //   // });
-
-  //   formData.append("file", file);
-
-  //   const resUploadFile = await this.axiosInstance.post(
-  //     urlUploadFile,
-  //     formData,
-  //   );
-  //   const { contentMessageToken } = resUploadFile.data as {
-  //     contentMessageToken: string;
-  //   };
-
-  //   const timestamp = new Date().getTime();
-  //   const random = Math.floor(10000000 + Math.random() * 90000000);
-  //   const sendId = webChatId + "_" + timestamp + "_" + random;
-
-  //   await this.axiosInstance.post(
-  //     urlBulkSendFiles,
-  //     {
-  //       items: [
-  //         {
-  //           sendId: sendId,
-  //           contentMessageToken,
-  //         },
-  //       ],
-  //     },
-  //     {
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //     },
-  //   );
-
-  //   for (let i = 0; i < 5; i++) {
-  //     await new Promise((resolve) => setTimeout(resolve, 1000));
-  //     const messages = await this.getMessages(webBotId, webChatId, {
-  //       find: {
-  //         sendId,
-  //       },
-  //     });
-  //     if (messages.length === 1) {
-  //       return messages[0];
-  //     } else if (messages.length > 1) {
-  //       throw new Error(
-  //         `Multiple messages found with sendId ${sendId}: ${messages.length}`,
-  //       );
-  //     }
-  //   }
-  //   throw new Error(`Message with sendId ${sendId} not found after 5 attempts`);
-  // }
 
   public async getChatMembers({
     webBotId,
@@ -824,13 +759,7 @@ export class LineWeb {
     let pageCount = 0;
 
     do {
-      const url = API_URL(
-        webBotId,
-        webChatId,
-        limitPerPage,
-        webUserIds,
-        next,
-      );
+      const url = API_URL(webBotId, webChatId, limitPerPage, webUserIds, next);
       const data = await this.request<MemberListResponse>(
         { url, method: "get" },
         "Failed to fetch chat members",
@@ -843,7 +772,6 @@ export class LineWeb {
         break;
       }
     } while (next);
-
 
     return { list: allMembers, next };
   }
