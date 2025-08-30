@@ -485,6 +485,7 @@ export class LineWeb {
     bizIds?: string[];
   }): Promise<OwnersResponse> {
     this.validParamsType({ webBotId, bizIds });
+
     const API_URL =
       `https://chat.line.biz/api/v1/bots/${webBotId}/owners` +
       (bizIds ? `?bizIds=${bizIds.join(",")}` : "");
@@ -843,6 +844,7 @@ export class LineWeb {
       }
     } while (next);
 
+
     return { list: allMembers, next };
   }
 
@@ -858,6 +860,7 @@ export class LineWeb {
     timestamp?: string;
   }) {
     this.validParamsType({ webBotId, webChatId, messageId, timestamp });
+
     const API_URL =
       `https://chat.line.biz/api/v1/bots/${webBotId}/chats/${webChatId}/messages/flexJson?messageId=${messageId}` +
       (timestamp ? `&timestamp=${timestamp}` : "");
@@ -869,6 +872,7 @@ export class LineWeb {
 
   public async logout(): Promise<void> {
     const API_URL = "https://chat.line.biz/api/v1/logoutUri";
+
     const res = await this.request<{ logoutUri: string }>(
       {
         url: API_URL,
