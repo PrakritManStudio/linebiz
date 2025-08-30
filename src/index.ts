@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance, AxiosError } from "axios";
 
-import { LineWebError, isLineWebError } from "./errors";
+import { LineWebError, isLineWebError, LineWebErrorCode } from "./errors";
 import type { FlexContainer } from "@line/bot-sdk";
 
 import type { Me } from "./type/me";
@@ -57,7 +57,7 @@ export class LineWeb {
         .join("; ");
     } catch {
       throw new LineWebError({
-        code: "COOKIE_INVALID",
+        code: LineWebErrorCode.INVALID_COOKIE,
         message: "Invalid cookies format. Expected JSON string.",
       });
     }
@@ -100,25 +100,25 @@ export class LineWeb {
     if (webChatId !== undefined) {
       if (typeof webChatId !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid webChatId type (must be a string). Received: ${typeof webChatId}`,
         });
       }
       if (webChatId.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "webChatId cannot be an empty string.",
         });
       }
       if (webChatId.length !== this.lineWebChatIdLength) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid webChatId length (must be ${this.lineWebChatIdLength} characters). Received: ${webChatId.length}`,
         });
       }
       if (!/^[a-zA-Z0-9]+$/.test(webChatId)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "webChatId must contain only a-z, A-Z, 0-9 characters.",
         });
       }
@@ -126,25 +126,25 @@ export class LineWeb {
     if (webBotId !== undefined) {
       if (typeof webBotId !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid webBotId type (must be a string). Received: ${typeof webBotId}`,
         });
       }
       if (webBotId.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "webBotId cannot be an empty string.",
         });
       }
       if (webBotId.length !== this.lineWebBotIdLength) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid webBotId length (must be ${this.lineWebBotIdLength} characters). Received: ${webBotId.length}`,
         });
       }
       if (!/^[a-zA-Z0-9]+$/.test(webBotId)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "webBotId must contain only a-z, A-Z, 0-9 characters.",
         });
       }
@@ -152,7 +152,7 @@ export class LineWeb {
     if (limitPerPage !== undefined) {
       if (typeof limitPerPage !== "number" || !Number.isInteger(limitPerPage)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid limitPerPage type (must be an integer). Received: ${typeof limitPerPage}`,
         });
       }
@@ -160,13 +160,13 @@ export class LineWeb {
     if (maxPages !== undefined) {
       if (typeof maxPages !== "number" || !Number.isInteger(maxPages)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid maxPages type (must be an integer >= 0). Received: ${typeof maxPages}`,
         });
       }
       if (maxPages < 0) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid maxPages value (must be a non-negative integer). Received: ${maxPages}`,
         });
       }
@@ -174,13 +174,13 @@ export class LineWeb {
     if (nextToken !== undefined) {
       if (typeof nextToken !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid nextToken type (must be a string). Received: ${typeof nextToken}`,
         });
       }
       if (nextToken.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "nextToken cannot be an empty string.",
         });
       }
@@ -188,13 +188,13 @@ export class LineWeb {
     if (backwardToken !== undefined) {
       if (typeof backwardToken !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid backwardToken type (must be a string). Received: ${typeof backwardToken}`,
         });
       }
       if (backwardToken.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "backwardToken cannot be an empty string.",
         });
       }
@@ -202,32 +202,32 @@ export class LineWeb {
     if (webUserIds !== undefined) {
       if (!Array.isArray(webUserIds)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid webUserIds type (must be an array of strings). Received: ${typeof webUserIds}`,
         });
       }
       for (const id of webUserIds) {
         if (typeof id !== "string") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: `Invalid webUserId type (must be a string). Received: ${typeof id}`,
           });
         }
         if (id.trim() === "") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: "webUserId cannot be an empty string.",
           });
         }
         if (id.length !== this.lineWebUserIdLength) {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: `Invalid webUserId length (must be ${this.lineWebUserIdLength} characters). Received: ${id.length}`,
           });
         }
         if (!/^[a-zA-Z0-9]+$/.test(id)) {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: "webUserId must contain only a-z, A-Z, 0-9 characters.",
           });
         }
@@ -236,33 +236,33 @@ export class LineWeb {
     if (bizIds !== undefined) {
       if (!Array.isArray(bizIds)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid bizIds type (must be an array of strings). Received: ${typeof bizIds}`,
         });
       }
       for (const id of bizIds) {
         if (typeof id !== "string") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: `Invalid bizId type (must be a string). Received: ${typeof id}`,
           });
         }
         if (id.trim() === "") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: "bizId cannot be an empty string.",
           });
         }
         if (!/^[0-9a-fA-F-]{36}$/.test(id)) {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message:
               "bizId must be a valid UUID (36 characters, hex and dashes).",
           });
         }
         if (id.length !== 36) {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: `Invalid bizId length (must be 36 characters for UUID). Received: ${id.length}`,
           });
         }
@@ -271,26 +271,26 @@ export class LineWeb {
     if (tagIds !== undefined) {
       if (!Array.isArray(tagIds)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid tagIds type (must be an array of strings). Received: ${typeof tagIds}`,
         });
       }
       for (const id of tagIds) {
         if (typeof id !== "string") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: `Invalid tagId type (must be a string). Received: ${typeof id}`,
           });
         }
         if (id.trim() === "") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: "tagId cannot be an empty string.",
           });
         }
         if (!/^[a-zA-Z0-9]+$/.test(id)) {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: "tagId must contain only a-z, A-Z, 0-9 characters.",
           });
         }
@@ -299,19 +299,19 @@ export class LineWeb {
     if (messageId !== undefined) {
       if (typeof messageId !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid messageId type (must be a string). Received: ${typeof messageId}`,
         });
       }
       if (messageId.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "messageId cannot be an empty string.",
         });
       }
       if (!/^[0-9]+$/.test(messageId)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "messageId must contain only digits (0-9).",
         });
       }
@@ -319,19 +319,19 @@ export class LineWeb {
     if (timestamp !== undefined) {
       if (typeof timestamp !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid timestamp type (must be a string). Received: ${typeof timestamp}`,
         });
       }
       if (timestamp.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "timestamp cannot be an empty string.",
         });
       }
       if (!/^[0-9]+$/.test(timestamp)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "timestamp must contain only digits (0-9).",
         });
       }
@@ -345,7 +345,7 @@ export class LineWeb {
         error.response?.data?.code === "not_login"
       ) {
         throw new LineWebError({
-          code: "COOKIE_EXPIRED",
+          code: LineWebErrorCode.EXPIRED_COOKIE,
           message: "Cookies have expired or are not logged in.",
           cause: error,
           status: error.response?.status,
@@ -357,13 +357,13 @@ export class LineWeb {
         error.response?.data?.code === "not_found_operatable_bot"
       ) {
         throw new LineWebError({
-          code: "NOT_FOUND",
+          code: LineWebErrorCode.NOT_FOUND,
           message: "Bot not found or not operatable.",
         });
       }
 
       throw new LineWebError({
-        code: "AXIOS_ERROR",
+        code: LineWebErrorCode.AXIOS_ERROR,
         message: "Axios error occurred",
         cause: error,
         status: error.response?.status,
@@ -383,7 +383,7 @@ export class LineWeb {
     } catch (error: unknown | AxiosError) {
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
         message: "Failed to fetch user profile",
         cause: error,
       });
@@ -422,7 +422,7 @@ export class LineWeb {
     });
     if (limitPerPage < 1 || limitPerPage > 1000) {
       throw new LineWebError({
-        code: "PARAMS_INVALID",
+        code: LineWebErrorCode.INVALID_PARAMETER,
         message: `Invalid limitPerPage value (must be between 1 and 1000). Received: ${limitPerPage}`,
       });
     }
@@ -480,7 +480,7 @@ export class LineWeb {
     } catch (error: unknown | AxiosError) {
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
         message: "Failed to fetch user profile",
         cause: error,
       });
@@ -510,7 +510,7 @@ export class LineWeb {
     } catch (error: unknown | AxiosError) {
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
         message: "Failed to fetch owners",
         cause: error,
       });
@@ -543,7 +543,7 @@ export class LineWeb {
       }
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
         message: "Failed to fetch tags",
         cause: error,
       });
@@ -579,7 +579,7 @@ export class LineWeb {
     this.validParamsType({ webBotId, limitPerPage, maxPages, nextToken });
     if (limitPerPage < 1 || limitPerPage > 25) {
       throw new LineWebError({
-        code: "PARAMS_INVALID",
+        code: LineWebErrorCode.INVALID_PARAMETER,
         message: `Invalid limitPerPage value (must be between 1 and 25). Received: ${limitPerPage}`,
       });
     }
@@ -626,7 +626,7 @@ export class LineWeb {
     } catch (error: unknown | AxiosError) {
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
         message: "Failed to fetch chats",
         cause: error,
       });
@@ -703,7 +703,7 @@ export class LineWeb {
     } catch (error: unknown | AxiosError) {
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
         message: "Failed to fetch messages",
         cause: error,
       });
@@ -732,7 +732,7 @@ export class LineWeb {
     this.validParamsType({ webBotId, limitPerPage, maxPages, nextToken });
     if (limitPerPage < 1 || limitPerPage > 100) {
       throw new LineWebError({
-        code: "PARAMS_INVALID",
+        code: LineWebErrorCode.INVALID_PARAMETER,
         message: `Invalid limitPerPage value (must be between 1 and 100). Received: ${limitPerPage}`,
       });
     }
@@ -786,7 +786,7 @@ export class LineWeb {
     } catch (error: unknown | AxiosError) {
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
         message: "Failed to fetch contacts",
         cause: error,
       });
@@ -889,7 +889,7 @@ export class LineWeb {
     });
     if (limitPerPage < 1 || limitPerPage > 100) {
       throw new LineWebError({
-        code: "PARAMS_INVALID",
+        code: LineWebErrorCode.INVALID_PARAMETER,
         message: `Invalid limitPerPage value (must be between 1 and 100). Received: ${limitPerPage}`,
       });
     }
@@ -944,7 +944,7 @@ export class LineWeb {
     } catch (error: unknown | AxiosError) {
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
         message: "Failed to fetch chat members",
         cause: error,
       });
@@ -976,7 +976,7 @@ export class LineWeb {
     } catch (error: unknown | AxiosError) {
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
         message: "Failed to fetch flex message content",
         cause: error,
       });
@@ -1000,7 +1000,7 @@ export class LineWeb {
       const logoutUriResponse = res.data as { logoutUri: string };
       if (!logoutUriResponse.logoutUri) {
         throw new LineWebError({
-          code: "LOGOUT_FAILED",
+          code: LineWebErrorCode.LOGOUT_FAILURE,
           message: "Logout URI not found in the response",
         });
       }
@@ -1012,7 +1012,7 @@ export class LineWeb {
       }
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
         message: "Failed to logout",
         cause: error,
       });
