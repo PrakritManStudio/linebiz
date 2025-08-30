@@ -8,5 +8,5 @@ export default defineConfig({
   clean: true,
   target: "node18",
   treeshake: true,
-  minify: false
+  minify: false,
 });

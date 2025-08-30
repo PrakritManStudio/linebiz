@@ -1,4 +1,3 @@
-
 export enum LineWebErrorCode {
   INVALID_COOKIE = "INVALID_COOKIE",
   EXPIRED_COOKIE = "EXPIRED_COOKIE",
@@ -21,7 +20,7 @@ export interface LibErrorShape {
 }
 
 export class LineWebError extends Error implements LibErrorShape {
-  name: "LineWebError" = "LineWebError";
+  name = "LineWebError" as const;
   code: LineWebErrorCode;
   status?: number;
   meta?: Record<string, unknown>;

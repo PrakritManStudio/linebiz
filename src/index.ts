@@ -28,7 +28,11 @@ export class LineWeb {
   public lineWebBotIdLength = 33;
   public lineWebUserIdLength = 33;
 
-  constructor(options: { cookies: string; axios?: AxiosInstance; axiosConfig?: AxiosRequestConfig }) {
+  constructor(options: {
+    cookies: string;
+    axios?: AxiosInstance;
+    axiosConfig?: AxiosRequestConfig;
+  }) {
     this.cookies = this.parseCookies(options.cookies);
     if (options.axios) {
       this.axiosInstance = options.axios;
