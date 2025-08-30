@@ -1,6 +1,10 @@
-import axios, { type AxiosInstance, AxiosError } from "axios";
+import axios, {
+  type AxiosInstance,
+  AxiosError,
+  type AxiosRequestConfig,
+} from "axios";
 
-import { LineWebError, isLineWebError } from "./errors";
+import { LineWebError, LineWebErrorCode } from "./errors";
 import type { FlexContainer } from "@line/bot-sdk";
 
 import type { Me } from "./type/me";
@@ -57,7 +61,7 @@ export class LineWeb {
         .join("; ");
     } catch {
       throw new LineWebError({
-        code: "COOKIE_INVALID",
+        code: LineWebErrorCode.INVALID_COOKIE,
         message: "Invalid cookies format. Expected JSON string.",
       });
     }
@@ -100,25 +104,25 @@ export class LineWeb {
     if (webChatId !== undefined) {
       if (typeof webChatId !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid webChatId type (must be a string). Received: ${typeof webChatId}`,
         });
       }
       if (webChatId.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "webChatId cannot be an empty string.",
         });
       }
       if (webChatId.length !== this.lineWebChatIdLength) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid webChatId length (must be ${this.lineWebChatIdLength} characters). Received: ${webChatId.length}`,
         });
       }
       if (!/^[a-zA-Z0-9]+$/.test(webChatId)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "webChatId must contain only a-z, A-Z, 0-9 characters.",
         });
       }
@@ -126,25 +130,25 @@ export class LineWeb {
     if (webBotId !== undefined) {
       if (typeof webBotId !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid webBotId type (must be a string). Received: ${typeof webBotId}`,
         });
       }
       if (webBotId.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "webBotId cannot be an empty string.",
         });
       }
       if (webBotId.length !== this.lineWebBotIdLength) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid webBotId length (must be ${this.lineWebBotIdLength} characters). Received: ${webBotId.length}`,
         });
       }
       if (!/^[a-zA-Z0-9]+$/.test(webBotId)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "webBotId must contain only a-z, A-Z, 0-9 characters.",
         });
       }
@@ -152,7 +156,7 @@ export class LineWeb {
     if (limitPerPage !== undefined) {
       if (typeof limitPerPage !== "number" || !Number.isInteger(limitPerPage)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid limitPerPage type (must be an integer). Received: ${typeof limitPerPage}`,
         });
       }
@@ -160,13 +164,13 @@ export class LineWeb {
     if (maxPages !== undefined) {
       if (typeof maxPages !== "number" || !Number.isInteger(maxPages)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid maxPages type (must be an integer >= 0). Received: ${typeof maxPages}`,
         });
       }
       if (maxPages < 0) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid maxPages value (must be a non-negative integer). Received: ${maxPages}`,
         });
       }
@@ -174,13 +178,13 @@ export class LineWeb {
     if (nextToken !== undefined) {
       if (typeof nextToken !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid nextToken type (must be a string). Received: ${typeof nextToken}`,
         });
       }
       if (nextToken.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "nextToken cannot be an empty string.",
         });
       }
@@ -188,13 +192,13 @@ export class LineWeb {
     if (backwardToken !== undefined) {
       if (typeof backwardToken !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid backwardToken type (must be a string). Received: ${typeof backwardToken}`,
         });
       }
       if (backwardToken.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "backwardToken cannot be an empty string.",
         });
       }
@@ -202,32 +206,32 @@ export class LineWeb {
     if (webUserIds !== undefined) {
       if (!Array.isArray(webUserIds)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid webUserIds type (must be an array of strings). Received: ${typeof webUserIds}`,
         });
       }
       for (const id of webUserIds) {
         if (typeof id !== "string") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: `Invalid webUserId type (must be a string). Received: ${typeof id}`,
           });
         }
         if (id.trim() === "") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: "webUserId cannot be an empty string.",
           });
         }
         if (id.length !== this.lineWebUserIdLength) {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: `Invalid webUserId length (must be ${this.lineWebUserIdLength} characters). Received: ${id.length}`,
           });
         }
         if (!/^[a-zA-Z0-9]+$/.test(id)) {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: "webUserId must contain only a-z, A-Z, 0-9 characters.",
           });
         }
@@ -236,33 +240,33 @@ export class LineWeb {
     if (bizIds !== undefined) {
       if (!Array.isArray(bizIds)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid bizIds type (must be an array of strings). Received: ${typeof bizIds}`,
         });
       }
       for (const id of bizIds) {
         if (typeof id !== "string") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: `Invalid bizId type (must be a string). Received: ${typeof id}`,
           });
         }
         if (id.trim() === "") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: "bizId cannot be an empty string.",
           });
         }
         if (!/^[0-9a-fA-F-]{36}$/.test(id)) {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message:
               "bizId must be a valid UUID (36 characters, hex and dashes).",
           });
         }
         if (id.length !== 36) {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: `Invalid bizId length (must be 36 characters for UUID). Received: ${id.length}`,
           });
         }
@@ -271,26 +275,26 @@ export class LineWeb {
     if (tagIds !== undefined) {
       if (!Array.isArray(tagIds)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid tagIds type (must be an array of strings). Received: ${typeof tagIds}`,
         });
       }
       for (const id of tagIds) {
         if (typeof id !== "string") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: `Invalid tagId type (must be a string). Received: ${typeof id}`,
           });
         }
         if (id.trim() === "") {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: "tagId cannot be an empty string.",
           });
         }
         if (!/^[a-zA-Z0-9]+$/.test(id)) {
           throw new LineWebError({
-            code: "PARAMS_INVALID",
+            code: LineWebErrorCode.INVALID_PARAMETER,
             message: "tagId must contain only a-z, A-Z, 0-9 characters.",
           });
         }
@@ -299,19 +303,19 @@ export class LineWeb {
     if (messageId !== undefined) {
       if (typeof messageId !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid messageId type (must be a string). Received: ${typeof messageId}`,
         });
       }
       if (messageId.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "messageId cannot be an empty string.",
         });
       }
       if (!/^[0-9]+$/.test(messageId)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "messageId must contain only digits (0-9).",
         });
       }
@@ -319,19 +323,19 @@ export class LineWeb {
     if (timestamp !== undefined) {
       if (typeof timestamp !== "string") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: `Invalid timestamp type (must be a string). Received: ${typeof timestamp}`,
         });
       }
       if (timestamp.trim() === "") {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "timestamp cannot be an empty string.",
         });
       }
       if (!/^[0-9]+$/.test(timestamp)) {
         throw new LineWebError({
-          code: "PARAMS_INVALID",
+          code: LineWebErrorCode.INVALID_PARAMETER,
           message: "timestamp must contain only digits (0-9).",
         });
       }
@@ -345,7 +349,7 @@ export class LineWeb {
         error.response?.data?.code === "not_login"
       ) {
         throw new LineWebError({
-          code: "COOKIE_EXPIRED",
+          code: LineWebErrorCode.EXPIRED_COOKIE,
           message: "Cookies have expired or are not logged in.",
           cause: error,
           status: error.response?.status,
@@ -357,13 +361,13 @@ export class LineWeb {
         error.response?.data?.code === "not_found_operatable_bot"
       ) {
         throw new LineWebError({
-          code: "NOT_FOUND",
+          code: LineWebErrorCode.NOT_FOUND,
           message: "Bot not found or not operatable.",
         });
       }
 
       throw new LineWebError({
-        code: "AXIOS_ERROR",
+        code: LineWebErrorCode.AXIOS_ERROR,
         message: "Axios error occurred",
         cause: error,
         status: error.response?.status,
@@ -371,23 +375,29 @@ export class LineWeb {
     }
   }
 
-  public async getMe(): Promise<Me> {
-    const API_URL = "https://chat.line.biz/api/v1/me";
+  private async request<T>(
+    config: AxiosRequestConfig,
+    message: string,
+  ): Promise<T> {
     try {
-      const response = await this.axiosInstance.get(API_URL, {
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const response = await this.axiosInstance.request<T>({
+        headers: { "Content-Type": "application/json", ...(config.headers ?? {}) },
+        ...config,
       });
-      return response.data as Me;
+      return response.data;
     } catch (error: unknown | AxiosError) {
       this.handleAxiosError(error);
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
-        message: "Failed to fetch user profile",
+        code: LineWebErrorCode.UNKNOWN_ERROR,
+        message,
         cause: error,
       });
     }
+  }
+
+  public async getMe(): Promise<Me> {
+    const API_URL = "https://chat.line.biz/api/v1/me";
+    return this.request<Me>({ url: API_URL, method: "get" }, "Failed to fetch user profile");
   }
 
   // Function overloads for dynamic return types
@@ -422,68 +432,48 @@ export class LineWeb {
     });
     if (limitPerPage < 1 || limitPerPage > 1000) {
       throw new LineWebError({
-        code: "PARAMS_INVALID",
+        code: LineWebErrorCode.INVALID_PARAMETER,
         message: `Invalid limitPerPage value (must be between 1 and 1000). Received: ${limitPerPage}`,
       });
     }
 
-    try {
-      if (webBotId) {
-        if (nextToken) {
-          console.log("nextToken is not supported when webBotId is provided");
-        }
-        const API_URL = `https://chat.line.biz/api/v1/bots/${webBotId}?noFilter=true`;
-
-        const response = await this.axiosInstance.get(API_URL, {
-          headers: {
-            "Content-Type": "application/json",
-          },
+    if (webBotId) {
+      if (nextToken) {
+        throw new LineWebError({
+          code: LineWebErrorCode.INVALID_PARAMETER,
+          message: "nextToken is not supported when webBotId is provided.",
         });
-
-        return response.data as Bot;
-      } else {
-        function API_URL(limitPerPage: number, nextToken?: string) {
-          return (
-            `https://chat.line.biz/api/v1/bots?noFilter=true&limit=${limitPerPage}` +
-            (nextToken ? `&next=${nextToken}` : "")
-          );
-        }
-
-        let allBot: BotData[] = [];
-        let next = nextToken;
-        let pageCount = 0;
-
-        do {
-          const url = API_URL(limitPerPage, nextToken);
-          const response = await this.axiosInstance.get(url, {
-            headers: {
-              "Content-Type": "application/json",
-            },
-          });
-          const data = response.data as BotsList;
-
-          allBot = [...allBot, ...data.list];
-          next = data.next;
-          pageCount++;
-
-          if (maxPages > 0 && pageCount >= maxPages) {
-            break;
-          }
-        } while (next);
-
-        const response: BotsList = {
-          list: allBot,
-          next: next,
-        };
-        return response;
       }
-    } catch (error: unknown | AxiosError) {
-      this.handleAxiosError(error);
-      throw new LineWebError({
-        code: "UNKNOWN_ERROR",
-        message: "Failed to fetch user profile",
-        cause: error,
-      });
+      const API_URL = `https://chat.line.biz/api/v1/bots/${webBotId}?noFilter=true`;
+      return this.request<Bot>({ url: API_URL, method: "get" }, "Failed to fetch bot");
+    } else {
+      function API_URL(limitPerPage: number, nextToken?: string) {
+        return (
+          `https://chat.line.biz/api/v1/bots?noFilter=true&limit=${limitPerPage}` +
+          (nextToken ? `&next=${nextToken}` : "")
+        );
+      }
+
+      let allBot: BotData[] = [];
+      let next = nextToken;
+      let pageCount = 0;
+
+      do {
+        const url = API_URL(limitPerPage, next);
+        const data = await this.request<BotsList>(
+          { url, method: "get" },
+          "Failed to fetch bots",
+        );
+        allBot = [...allBot, ...data.list];
+        next = data.next;
+        pageCount++;
+
+        if (maxPages > 0 && pageCount >= maxPages) {
+          break;
+        }
+      } while (next);
+
+      return { list: allBot, next };
     }
   }
 
@@ -495,26 +485,13 @@ export class LineWeb {
     bizIds?: string[];
   }): Promise<OwnersResponse> {
     this.validParamsType({ webBotId, bizIds });
-    try {
-      const API_URL =
-        `https://chat.line.biz/api/v1/bots/${webBotId}/owners` +
-        (bizIds ? `?bizIds=${bizIds.join(",")}` : "");
-
-      const response = await this.axiosInstance.get(API_URL, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const data = response.data as OwnersResponse;
-      return data;
-    } catch (error: unknown | AxiosError) {
-      this.handleAxiosError(error);
-      throw new LineWebError({
-        code: "UNKNOWN_ERROR",
-        message: "Failed to fetch owners",
-        cause: error,
-      });
-    }
+    const API_URL =
+      `https://chat.line.biz/api/v1/bots/${webBotId}/owners` +
+      (bizIds ? `?bizIds=${bizIds.join(",")}` : "");
+    return this.request<OwnersResponse>(
+      { url: API_URL, method: "get" },
+      "Failed to fetch owners",
+    );
   }
 
   public async getTags({
@@ -525,29 +502,13 @@ export class LineWeb {
     tagIds?: string[];
   }): Promise<TagsResponse> {
     // this.validParamsType({ webBotId, tagIds });
-    try {
-      const API_URL =
-        `https://chat.line.biz/api/v1/bots/${webBotId}/tags` +
-        (tagIds ? `?tagIds=${tagIds.join(",")}` : "");
-
-      const response = await this.axiosInstance.get(API_URL, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const data = response.data as TagsResponse;
-      return data;
-    } catch (error: unknown | AxiosError) {
-      if (axios.isAxiosError(error)) {
-        console.log(error.response?.data);
-      }
-      this.handleAxiosError(error);
-      throw new LineWebError({
-        code: "UNKNOWN_ERROR",
-        message: "Failed to fetch tags",
-        cause: error,
-      });
-    }
+    const API_URL =
+      `https://chat.line.biz/api/v1/bots/${webBotId}/tags` +
+      (tagIds ? `?tagIds=${tagIds.join(",")}` : "");
+    return this.request<TagsResponse>(
+      { url: API_URL, method: "get" },
+      "Failed to fetch tags",
+    );
   }
 
   /**
@@ -579,58 +540,40 @@ export class LineWeb {
     this.validParamsType({ webBotId, limitPerPage, maxPages, nextToken });
     if (limitPerPage < 1 || limitPerPage > 25) {
       throw new LineWebError({
-        code: "PARAMS_INVALID",
+        code: LineWebErrorCode.INVALID_PARAMETER,
         message: `Invalid limitPerPage value (must be between 1 and 25). Received: ${limitPerPage}`,
       });
     }
-
-    try {
-      function API_URL(
-        _webBotId: string,
-        _limitPerPage: number,
-        _nextToken?: string
-      ) {
-        const baseUrl = `https://chat.line.biz/api/v2/bots/${_webBotId}/chats?folderType=ALL&tagIds=&autoTagIds=&limit=${_limitPerPage}&prioritizePinnedChat=true`;
-        return _nextToken ? `${baseUrl}&next=${_nextToken}` : baseUrl;
-      }
-
-      let allChats: Chat[] = [];
-      let next = nextToken;
-      let pageCount = 0;
-
-      do {
-        const url = API_URL(webBotId, limitPerPage, next);
-        const response = await this.axiosInstance.get(url, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        const data = response.data as ChatsResponse;
-
-        allChats = [...allChats, ...data.list];
-        next = data.next;
-        pageCount++;
-
-        console.log(`Fetched ${allChats.length}`);
-        if (maxPages > 0 && pageCount >= maxPages) {
-          break;
-        }
-      } while (next);
-
-      const response: ChatsResponse = {
-        list: allChats,
-        next: next,
-      };
-      return response;
-    } catch (error: unknown | AxiosError) {
-      this.handleAxiosError(error);
-      throw new LineWebError({
-        code: "UNKNOWN_ERROR",
-        message: "Failed to fetch chats",
-        cause: error,
-      });
+    function API_URL(
+      _webBotId: string,
+      _limitPerPage: number,
+      _nextToken?: string,
+    ) {
+      const baseUrl = `https://chat.line.biz/api/v2/bots/${_webBotId}/chats?folderType=ALL&tagIds=&autoTagIds=&limit=${_limitPerPage}&prioritizePinnedChat=true`;
+      return _nextToken ? `${baseUrl}&next=${_nextToken}` : baseUrl;
     }
+
+    let allChats: Chat[] = [];
+    let next = nextToken;
+    let pageCount = 0;
+
+    do {
+      const url = API_URL(webBotId, limitPerPage, next);
+      const data = await this.request<ChatsResponse>(
+        { url, method: "get" },
+        "Failed to fetch chats",
+      );
+
+      allChats = [...allChats, ...data.list];
+      next = data.next;
+      pageCount++;
+
+      if (maxPages > 0 && pageCount >= maxPages) {
+        break;
+      }
+    } while (next);
+
+    return { list: allChats, next };
   }
 
   /**
@@ -661,53 +604,36 @@ export class LineWeb {
     backwardToken?: string;
   }): Promise<MessagesResponse> {
     this.validParamsType({ webBotId, webChatId, maxPages, backwardToken });
-
-    try {
-      function API_URL(
-        _webBotId: string,
-        _webChatId: string,
-        _backward?: string
-      ) {
-        const baseUrl = `https://chat.line.biz/api/v3/bots/${_webBotId}/chats/${_webChatId}/messages`;
-        return _backward ? `${baseUrl}?backward=${_backward}` : baseUrl;
-      }
-
-      let allMessages: MessageEventType[] = [];
-      let backward = backwardToken;
-      let pageCount = 0;
-
-      do {
-        const url = API_URL(webBotId, webChatId, backward);
-        const response = await this.axiosInstance.get(url, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        const data = response.data as MessagesResponse;
-
-        allMessages = [...allMessages, ...data.list];
-        backward = data.backward;
-        pageCount++;
-
-        if (maxPages > 0 && pageCount >= maxPages) {
-          break;
-        }
-      } while (backward);
-
-      const response: MessagesResponse = {
-        list: allMessages,
-        backward: backward,
-      };
-      return response;
-    } catch (error: unknown | AxiosError) {
-      this.handleAxiosError(error);
-      throw new LineWebError({
-        code: "UNKNOWN_ERROR",
-        message: "Failed to fetch messages",
-        cause: error,
-      });
+    function API_URL(
+      _webBotId: string,
+      _webChatId: string,
+      _backward?: string,
+    ) {
+      const baseUrl = `https://chat.line.biz/api/v3/bots/${_webBotId}/chats/${_webChatId}/messages`;
+      return _backward ? `${baseUrl}?backward=${_backward}` : baseUrl;
     }
+
+    let allMessages: MessageEventType[] = [];
+    let backward = backwardToken;
+    let pageCount = 0;
+
+    do {
+      const url = API_URL(webBotId, webChatId, backward);
+      const data = await this.request<MessagesResponse>(
+        { url, method: "get" },
+        "Failed to fetch messages",
+      );
+
+      allMessages = [...allMessages, ...data.list];
+      backward = data.backward;
+      pageCount++;
+
+      if (maxPages > 0 && pageCount >= maxPages) {
+        break;
+      }
+    } while (backward);
+
+    return { list: allMessages, backward };
   }
 
   public async getContactByName({
@@ -732,65 +658,49 @@ export class LineWeb {
     this.validParamsType({ webBotId, limitPerPage, maxPages, nextToken });
     if (limitPerPage < 1 || limitPerPage > 100) {
       throw new LineWebError({
-        code: "PARAMS_INVALID",
+        code: LineWebErrorCode.INVALID_PARAMETER,
         message: `Invalid limitPerPage value (must be between 1 and 100). Received: ${limitPerPage}`,
       });
     }
-
-    try {
-      const encodedChatName = encodeURIComponent(chatName);
-      function API_URL(
-        _webBotId: string,
-        _chatName: string,
-        _filterKey: string,
-        _limitPerPage: number,
-        _sortKey: string,
-        _sortOrder: string
-      ) {
-        return `https://chat.line.biz/api/v2/bots/${_webBotId}/contacts?query=${_chatName}&sortKey=${_sortKey}&sortOrder=${_sortOrder}&filterKey=${_filterKey}&limit=${_limitPerPage}`;
-      }
-
-      let allContact: Contact[] = [];
-      let next = nextToken;
-      let pageCount = 0;
-
-      do {
-        const url = API_URL(
-          webBotId,
-          encodedChatName,
-          filterKey,
-          limitPerPage,
-          sortKey,
-          sortOrder
-        );
-        const response = await this.axiosInstance.get(url, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        const data = response.data as ContactResponse;
-
-        allContact = [...allContact, ...data.list];
-        next = data.next;
-        pageCount++;
-
-        if (maxPages > 0 && pageCount >= maxPages) {
-          break;
-        }
-      } while (next);
-      const response: ContactResponse = {
-        list: allContact,
-        next: next,
-      };
-      return response;
-    } catch (error: unknown | AxiosError) {
-      this.handleAxiosError(error);
-      throw new LineWebError({
-        code: "UNKNOWN_ERROR",
-        message: "Failed to fetch contacts",
-        cause: error,
-      });
+    const encodedChatName = encodeURIComponent(chatName);
+    function API_URL(
+      _webBotId: string,
+      _chatName: string,
+      _filterKey: string,
+      _limitPerPage: number,
+      _sortKey: string,
+      _sortOrder: string,
+    ) {
+      return `https://chat.line.biz/api/v2/bots/${_webBotId}/contacts?query=${_chatName}&sortKey=${_sortKey}&sortOrder=${_sortOrder}&filterKey=${_filterKey}&limit=${_limitPerPage}`;
     }
+
+    let allContact: Contact[] = [];
+    let next = nextToken;
+    let pageCount = 0;
+
+    do {
+      const url = API_URL(
+        webBotId,
+        encodedChatName,
+        filterKey,
+        limitPerPage,
+        sortKey,
+        sortOrder,
+      );
+      const data = await this.request<ContactResponse>(
+        { url, method: "get" },
+        "Failed to fetch contacts",
+      );
+      allContact = [...allContact, ...data.list];
+      next = data.next;
+      pageCount++;
+
+      if (maxPages > 0 && pageCount >= maxPages) {
+        break;
+      }
+    } while (next);
+
+    return { list: allContact, next };
   }
 
   // public async sendFile(
@@ -889,66 +799,51 @@ export class LineWeb {
     });
     if (limitPerPage < 1 || limitPerPage > 100) {
       throw new LineWebError({
-        code: "PARAMS_INVALID",
+        code: LineWebErrorCode.INVALID_PARAMETER,
         message: `Invalid limitPerPage value (must be between 1 and 100). Received: ${limitPerPage}`,
       });
     }
 
-    try {
-      function API_URL(
-        _webBotId: string,
-        _webChatId: string,
-        _limitPerPage: number,
-        _userIds?: string[],
-        _nextToken?: string
-      ) {
-        return (
-          `https://chat.line.biz/api/v1/bots/${_webBotId}/chats/${_webChatId}/members?limit=${_limitPerPage}` +
-          (_userIds ? `&userIds=${_userIds.join(",")}` : "") +
-          (_nextToken ? `&next=${_nextToken}` : "")
-        );
-      }
-
-      let allmember: Member[] = [];
-      let next = nextToken;
-      let pageCount = 0;
-
-      do {
-        const url = API_URL(
-          webBotId,
-          webChatId,
-          limitPerPage,
-          webUserIds,
-          nextToken
-        );
-        const response = await this.axiosInstance.get(url, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        const data = response.data as MemberListResponse;
-        allmember = [...allmember, ...data.list];
-        next = data.next;
-        pageCount++;
-
-        if (maxPages > 0 && pageCount >= maxPages) {
-          break;
-        }
-      } while (next);
-
-      const data: MemberListResponse = {
-        list: allmember,
-        next: next,
-      };
-      return data;
-    } catch (error: unknown | AxiosError) {
-      this.handleAxiosError(error);
-      throw new LineWebError({
-        code: "UNKNOWN_ERROR",
-        message: "Failed to fetch chat members",
-        cause: error,
-      });
+    function API_URL(
+      _webBotId: string,
+      _webChatId: string,
+      _limitPerPage: number,
+      _userIds?: string[],
+      _nextToken?: string,
+    ) {
+      return (
+        `https://chat.line.biz/api/v1/bots/${_webBotId}/chats/${_webChatId}/members?limit=${_limitPerPage}` +
+        (_userIds ? `&userIds=${_userIds.join(",")}` : "") +
+        (_nextToken ? `&next=${_nextToken}` : "")
+      );
     }
+
+    let allMembers: Member[] = [];
+    let next = nextToken;
+    let pageCount = 0;
+
+    do {
+      const url = API_URL(
+        webBotId,
+        webChatId,
+        limitPerPage,
+        webUserIds,
+        next,
+      );
+      const data = await this.request<MemberListResponse>(
+        { url, method: "get" },
+        "Failed to fetch chat members",
+      );
+      allMembers = [...allMembers, ...data.list];
+      next = data.next;
+      pageCount++;
+
+      if (maxPages > 0 && pageCount >= maxPages) {
+        break;
+      }
+    } while (next);
+
+    return { list: allMembers, next };
   }
 
   public async getFlexMessageContent({
@@ -963,59 +858,32 @@ export class LineWeb {
     timestamp?: string;
   }) {
     this.validParamsType({ webBotId, webChatId, messageId, timestamp });
-    try {
-      const API_URL =
-        `https://chat.line.biz/api/v1/bots/${webBotId}/chats/${webChatId}/messages/flexJson?messageId=${messageId}` +
-        (timestamp ? `&timestamp=${timestamp}` : "");
-      const response = await this.axiosInstance.get(API_URL, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      return response.data as FlexContainer;
-    } catch (error: unknown | AxiosError) {
-      this.handleAxiosError(error);
-      throw new LineWebError({
-        code: "UNKNOWN_ERROR",
-        message: "Failed to fetch flex message content",
-        cause: error,
-      });
-    }
+    const API_URL =
+      `https://chat.line.biz/api/v1/bots/${webBotId}/chats/${webChatId}/messages/flexJson?messageId=${messageId}` +
+      (timestamp ? `&timestamp=${timestamp}` : "");
+    return this.request<FlexContainer>(
+      { url: API_URL, method: "get" },
+      "Failed to fetch flex message content",
+    );
   }
 
   public async logout(): Promise<void> {
     const API_URL = "https://chat.line.biz/api/v1/logoutUri";
-    try {
-      const res = await this.axiosInstance.post(
-        API_URL,
-        {
-          redirectPath: "/",
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const logoutUriResponse = res.data as { logoutUri: string };
-      if (!logoutUriResponse.logoutUri) {
-        throw new LineWebError({
-          code: "LOGOUT_FAILED",
-          message: "Logout URI not found in the response",
-        });
-      }
-
-      await this.axiosInstance.get(logoutUriResponse.logoutUri);
-    } catch (error: unknown | AxiosError | LineWebError) {
-      if (isLineWebError(error)) {
-        throw error;
-      }
-      this.handleAxiosError(error);
+    const res = await this.request<{ logoutUri: string }>(
+      {
+        url: API_URL,
+        method: "post",
+        data: { redirectPath: "/" },
+      },
+      "Failed to logout",
+    );
+    if (!res.logoutUri) {
       throw new LineWebError({
-        code: "UNKNOWN_ERROR",
-        message: "Failed to logout",
-        cause: error,
+        code: LineWebErrorCode.LOGOUT_FAILURE,
+        message: "Logout URI not found in the response",
       });
     }
+
+    await this.request({ url: res.logoutUri, method: "get" }, "Failed to logout");
   }
 }

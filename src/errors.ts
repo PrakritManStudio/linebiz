@@ -1,21 +1,19 @@
-export type LibErrorCode =
-  | "COOKIE_EXPIRED"
-  | "COOKIE_INVALID"
-  | "PARAMS_INVALID"
-  | "AXIOS_ERROR"
-  | "LOGOUT_FAILED"
-  | "NETWORK"
-  | "TIMEOUT"
-  | "BAD_REQUEST"
-  | "UNAUTHORIZED"
-  | "FORBIDDEN"
-  | "NOT_FOUND"
-  | "SERVER"
-  | "UNKNOWN_ERROR";
+
+export enum LineWebErrorCode {
+  INVALID_COOKIE = "INVALID_COOKIE",
+  EXPIRED_COOKIE = "EXPIRED_COOKIE",
+  INVALID_PARAMETER = "INVALID_PARAMETER",
+  AXIOS_ERROR = "AXIOS_ERROR",
+  LOGOUT_FAILURE = "LOGOUT_FAILURE",
+  NOT_FOUND = "NOT_FOUND",
+  UNKNOWN_ERROR = "UNKNOWN_ERROR",
+}
+
+export type LibErrorCode = LineWebErrorCode;
 
 export interface LibErrorShape {
   name: "LineWebError";
-  code: LibErrorCode;
+  code: LineWebErrorCode;
   message: string;
   cause?: unknown; // เก็บของเดิมไว้ (AxiosError, DOMException, ฯลฯ)
   status?: number; // ถ้ามี HTTP status
@@ -24,7 +22,7 @@ export interface LibErrorShape {
 
 export class LineWebError extends Error implements LibErrorShape {
   name: "LineWebError" = "LineWebError";
-  code: LibErrorCode;
+  code: LineWebErrorCode;
   status?: number;
   meta?: Record<string, unknown>;
   cause?: unknown;
