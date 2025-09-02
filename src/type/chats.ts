@@ -38,7 +38,7 @@ export interface Chat {
   lastTalkedAt: number;
   lastReadMessageId: string;
   chatType: "GROUP" | "USER" | "ROOM";
-  status: string;
+  status: "active" | "blocked";
 }
 
 export interface ChatsResponse {

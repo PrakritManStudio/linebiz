@@ -1,6 +1,6 @@
 {
   "name": "@prakrit_m/lineweb",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "description": "Unofficial TypeScript client for LINE OA Web/Inbox (chat.line.biz)",
   "type": "module",
   "files": [
