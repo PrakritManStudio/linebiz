@@ -573,7 +573,7 @@ export class LineWeb {
       });
     }
     function API_URL(_webBotId: string, _limitPerPage: number, _nextToken?: string) {
-      const baseUrl = `https://chat.line.biz/api/v2/bots/${_webBotId}/chats?folderType=ALL&tagIds={${tagIds.join(",")}}&autoTagIds=&limit=${_limitPerPage}&prioritizePinnedChat=true`;
+      const baseUrl = `https://chat.line.biz/api/v2/bots/${_webBotId}/chats?folderType=ALL&tagIds=${tagIds.join(",")}&autoTagIds=&limit=${_limitPerPage}&prioritizePinnedChat=true`;
       return _nextToken ? `${baseUrl}&next=${_nextToken}` : baseUrl;
     }
 
