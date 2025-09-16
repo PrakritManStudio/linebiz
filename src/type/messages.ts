@@ -253,8 +253,8 @@ export type MessageEventType =
   | Message
   | MessageSent
   | Unsend
-  | Join
   | Leave
+  | Join
   | MemberLeft
   | MemberJoined;
 
