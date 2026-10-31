@@ -20,6 +20,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
+    "changeset": "changeset",
+    "release": "pnpm build && changeset publish",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "prepublishOnly": "pnpm check"
   },
@@ -47,6 +49,7 @@
   "homepage": "https://github.com/PrakritManStudio/linebiz#readme",
   "devDependencies": {
     "@arethetypeswrong/core": "^0.18.5",
+    "@changesets/cli": "^3.0.3",
     "@eslint/js": "^10.0.1",
     "@line/bot-sdk": "^11.4.0",
     "@types/node": "^22.20.5",
