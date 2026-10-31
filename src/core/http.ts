@@ -2,18 +2,22 @@ import type { CookieStore } from "./cookies.js";
 import {
   APIError,
   AbortError,
+  ConfigError,
   ConnectionError,
-  RateLimitError,
   TimeoutError,
   UnexpectedResponseError,
+  ValidationError,
   isLineBizError,
   redactHeaders,
   truncateBody,
 } from "./errors.js";
 import type { LineBizError } from "./errors.js";
-import { backoffDelay, isRetryableStatus } from "./retry.js";
+import { backoffDelay, isRetryableStatus, parseRetryAfter } from "./retry.js";
 import { isAllowedAbsoluteURL } from "./services.js";
 import type { Service } from "./services.js";
+
+/** Largest timeout (ms) `AbortSignal.timeout` honours; Node fires larger values after 1 ms (2^31 - 1). */
+export const MAX_TIMEOUT_MS = 2_147_483_647;
 
 /** Value accepted in a query string; `undefined` entries are skipped, arrays are comma-joined. */
 export type QueryValue = string | number | boolean | readonly string[] | undefined;
@@ -74,13 +78,19 @@ export interface ErrorContext extends RequestContext {
   error: LineBizError;
 }
 
-/** Observability hooks. Errors thrown by `onResponse` / `onError` are ignored. */
+/**
+ * Observability hooks. Errors thrown by `onResponse` / `onError` are ignored.
+ *
+ * Hooks observe the HTTP pipeline only: request building, network, HTTP status and response
+ * parsing. Errors raised by a resource method before or after the pipeline (argument validation,
+ * unexpected list shapes, a cursor that does not advance, a missing `logoutUri`) are not reported.
+ */
 export interface Hooks {
   /** Called before each request is sent; throwing aborts the call. */
   onRequest?(ctx: RequestContext): void | Promise<void>;
   /** Called after a response is received, for every status. */
   onResponse?(ctx: ResponseContext): void | Promise<void>;
-  /** Called once with the final error when a call fails. */
+  /** Called once with the final error raised inside the HTTP pipeline (request building, network, HTTP status, response parsing). */
   onError?(ctx: ErrorContext): void | Promise<void>;
 }
 
@@ -144,16 +154,71 @@ function resolveURL(config: HttpConfig, desc: RequestDescriptor): URL {
   return url;
 }
 
+/** Why a user-supplied header was refused. */
+export interface HeaderProblem {
+  /** Name of the offending header (never its value). */
+  name: string;
+  /** `cookie` for a `Cookie` header, `invalid` when the runtime refuses the name or value. */
+  reason: "cookie" | "invalid";
+}
+
+/**
+ * Find the first user-supplied header that cannot be sent: a `Cookie` header (cookies must go
+ * through the cookie store) or a name / value the runtime refuses.
+ *
+ * @param headers Header map to check.
+ * @returns The first problem found, or `undefined` when every header is acceptable.
+ * @internal
+ */
+export function findHeaderProblem(headers: Record<string, string>): HeaderProblem | undefined {
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === "cookie") return { name, reason: "cookie" };
+    try {
+      // Use a throwaway Headers: the runtime's TypeError would quote the header value.
+      new Headers([[name, value]]);
+    } catch {
+      return { name, reason: "invalid" };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Describe a {@link HeaderProblem} without quoting the header value.
+ *
+ * @param problem The problem to describe.
+ * @returns A message that names the header only.
+ * @internal
+ */
+export function describeHeaderProblem({ name, reason }: HeaderProblem): string {
+  return reason === "cookie"
+    ? 'The "cookie" header is not allowed in headers; pass cookies through "cookies" or "cookieStore"'
+    : `Header "${name}" has an invalid name or value`;
+}
+
 function buildHeaders(
   config: HttpConfig,
   desc: RequestDescriptor,
   options: RequestOptions,
 ): Headers {
+  const configProblem = findHeaderProblem(config.headers);
+  if (configProblem !== undefined) {
+    throw new ConfigError(describeHeaderProblem(configProblem), { code: "INVALID_OPTIONS" });
+  }
+  const callHeaders = options.headers ?? {};
+  const callProblem = findHeaderProblem(callHeaders);
+  if (callProblem !== undefined) {
+    throw new ValidationError({
+      param: "headers",
+      value: callProblem.name,
+      reason: describeHeaderProblem(callProblem),
+    });
+  }
   const headers = new Headers({ "User-Agent": config.userAgent, Accept: "application/json" });
   if (desc.service === "chat") headers.set("x-oa-chat-client-version", config.clientVersion);
   if (desc.body !== undefined) headers.set("Content-Type", "application/json");
   for (const [name, value] of Object.entries(config.headers)) headers.set(name, value);
-  for (const [name, value] of Object.entries(options.headers ?? {})) headers.set(name, value);
+  for (const [name, value] of Object.entries(callHeaders)) headers.set(name, value);
   return headers;
 }
 
@@ -166,8 +231,15 @@ async function safeHook(call: (() => void | Promise<void>) | undefined): Promise
   }
 }
 
-/** Default {@link HttpConfig.sleep}: a timer that rejects with {@link AbortError} when `signal` aborts. */
-function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
+/**
+ * Default {@link HttpConfig.sleep}: a timer that rejects with {@link AbortError} when `signal` aborts.
+ *
+ * @param ms Delay in milliseconds.
+ * @param signal Optional abort signal.
+ * @returns A promise that resolves after `ms`.
+ * @internal
+ */
+export function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted === true) {
       reject(new AbortError("Request aborted", { cause: signal.reason }));
@@ -235,6 +307,18 @@ export class HttpClient {
       },
     };
     try {
+      if (
+        options.timeout !== undefined &&
+        (!Number.isInteger(options.timeout) ||
+          options.timeout < 1 ||
+          options.timeout > MAX_TIMEOUT_MS)
+      ) {
+        throw new ValidationError({
+          param: "timeout",
+          value: options.timeout,
+          reason: `must be an integer between 1 and ${String(MAX_TIMEOUT_MS)}`,
+        });
+      }
       const headers = buildHeaders(this.config, desc, options);
       const prepared: PreparedRequest = {
         desc,
@@ -258,11 +342,12 @@ export class HttpClient {
             state.hookError?.error !== error &&
             isRetryable(error);
           if (!retry) throw error;
-          const delay =
-            error instanceof RateLimitError && error.retryAfter !== undefined
-              ? error.retryAfter
-              : backoffDelay(n);
-          await sleep(delay, options.signal);
+          // Retry-After applies to any retryable response (429, 503, ...), not only 429.
+          const retryAfter =
+            error instanceof APIError
+              ? parseRetryAfter(error.headers["retry-after"] ?? null)
+              : undefined;
+          await sleep(retryAfter ?? backoffDelay(n), options.signal);
         }
       }
     } catch (error) {
@@ -311,7 +396,16 @@ export class HttpClient {
 
     const headers = new Headers(baseHeaders);
     const cookie = await config.cookieStore.getCookieHeader(url);
-    if (cookie !== "") headers.set("Cookie", cookie);
+    if (cookie !== "") {
+      try {
+        headers.set("Cookie", cookie);
+      } catch {
+        // The runtime's TypeError quotes the whole header value, so it is deliberately dropped.
+        throw new ConfigError("Cookie store returned an invalid Cookie header", {
+          code: "INVALID_COOKIE",
+        });
+      }
+    }
 
     const ctx: RequestContext = {
       method,
@@ -341,7 +435,8 @@ export class HttpClient {
     const { status } = response;
 
     // Persist cookies before looking at the status: error responses may rotate the session.
-    const setCookies = response.headers.getSetCookie();
+    const setCookies =
+      typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
     if (setCookies.length > 0) await config.cookieStore.setCookies?.(url, setCookies);
 
     const responseHeaders = Object.fromEntries(response.headers);

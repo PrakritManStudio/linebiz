@@ -16,6 +16,7 @@ describe("LineBizClient", () => {
   it.each([
     { timeout: 0 },
     { timeout: 1.5 },
+    { timeout: 2_147_483_648 },
     { maxRetries: 11 },
     { maxRetries: -1 },
     { baseURLs: { chat: "not a url" } },

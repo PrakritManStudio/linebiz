@@ -1,12 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   AbortError,
   ConnectionError,
   InternalServerError,
   NotFoundError,
   TimeoutError,
+  ValidationError,
   UnexpectedResponseError,
 } from "../../src/core/errors.js";
+import { defaultSleep } from "../../src/core/http.js";
 import { make } from "../helpers/make-http.js";
 import { json, mockFetch } from "../helpers/mock-fetch.js";
 
@@ -269,5 +271,100 @@ describe("abort", () => {
       }).request(GET, { signal: ac.signal }),
     ).rejects.toBeInstanceOf(AbortError);
     expect(errors).toHaveLength(1);
+  });
+
+  it("honours Retry-After on 503 (any retryable status)", async () => {
+    const { delays, sleep } = recordingSleep();
+    const m = mockFetch(json({}, { status: 503, headers: { "retry-after": "2" } }), json({}));
+    await make({ fetch: m.fetch, maxRetries: 1, sleep }).request(GET);
+    expect(delays).toEqual([2000]);
+  });
+
+  it("falls back to backoff when Retry-After is unparseable", async () => {
+    const { delays, sleep } = recordingSleep();
+    const m = mockFetch(json({}, { status: 503, headers: { "retry-after": "soon" } }), json({}));
+    await make({ fetch: m.fetch, maxRetries: 1, sleep }).request(GET);
+    expect(delays).toHaveLength(1);
+    expect(delays[0]).toBeGreaterThanOrEqual(375);
+    expect(delays[0]).toBeLessThanOrEqual(625);
+  });
+});
+
+describe("timeout validation", () => {
+  it.each([0, -1, 1.5, Number.NaN, 2_147_483_648])(
+    "per-call timeout %s rejects with ValidationError, not RangeError",
+    async (timeout) => {
+      const m = mockFetch(json({}));
+      const seen: unknown[] = [];
+      const err = await make({
+        fetch: m.fetch,
+        hooks: {
+          onError: (c) => {
+            seen.push(c.error);
+          },
+        },
+      })
+        .request(GET, { timeout })
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ValidationError);
+      expect((err as ValidationError).param).toBe("timeout");
+      expect(seen).toEqual([err]);
+      expect(m.calls).toHaveLength(0);
+    },
+  );
+
+  it("accepts the maximum per-call timeout", async () => {
+    // Node fires larger timeouts after 1 ms, so the signal must still be live after a short wait.
+    const m = mockFetch(async (req) => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(req.signal.aborted).toBe(false);
+      return json({ ok: true });
+    });
+    await expect(
+      make({ fetch: m.fetch }).request(GET, { timeout: 2_147_483_647 }),
+    ).resolves.toEqual({ ok: true });
+  });
+});
+
+describe("defaultSleep", () => {
+  it("rejects immediately with AbortError when already aborted", async () => {
+    const ac = new AbortController();
+    ac.abort();
+    await expect(defaultSleep(60_000, ac.signal)).rejects.toBeInstanceOf(AbortError);
+  });
+
+  it("aborting mid-sleep rejects with AbortError and clears the timer", async () => {
+    vi.useFakeTimers();
+    try {
+      const ac = new AbortController();
+      let outcome: unknown = "pending";
+      const p = defaultSleep(60_000, ac.signal).then(
+        () => (outcome = "resolved"),
+        (e: unknown) => (outcome = e),
+      );
+      expect(vi.getTimerCount()).toBe(1);
+      ac.abort();
+      await p;
+      expect(outcome).toBeInstanceOf(AbortError);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resolves after the delay when not aborted", async () => {
+    vi.useFakeTimers();
+    try {
+      const ac = new AbortController();
+      let done = false;
+      const p = defaultSleep(1000, ac.signal).then(() => (done = true));
+      await vi.advanceTimersByTimeAsync(999);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await p;
+      expect(done).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

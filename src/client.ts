@@ -1,7 +1,12 @@
 import { MemoryCookieStore } from "./core/cookies.js";
 import type { CookieInput, CookieObject, CookieStore } from "./core/cookies.js";
 import { ConfigError } from "./core/errors.js";
-import { HttpClient } from "./core/http.js";
+import {
+  HttpClient,
+  MAX_TIMEOUT_MS,
+  describeHeaderProblem,
+  findHeaderProblem,
+} from "./core/http.js";
 import type { Hooks } from "./core/http.js";
 import { DEFAULT_BASE_URLS, DEFAULT_CLIENT_VERSION, DEFAULT_USER_AGENT } from "./core/services.js";
 import type { Service } from "./core/services.js";
@@ -132,8 +137,10 @@ export class LineBizClient {
   constructor(options: ClientOptions) {
     const cookieStore = resolveCookieStore(options);
     const baseURLs = resolveBaseURLs(options.baseURLs);
-    const timeout = resolveInt("timeout", options.timeout, 30_000, 1, Number.MAX_SAFE_INTEGER);
+    const timeout = resolveInt("timeout", options.timeout, 30_000, 1, MAX_TIMEOUT_MS);
     const maxRetries = resolveInt("maxRetries", options.maxRetries, 2, 0, 10);
+    const headerProblem = findHeaderProblem(options.headers ?? {});
+    if (headerProblem !== undefined) invalid(describeHeaderProblem(headerProblem));
 
     const rest: Omit<ClientOptions, "cookies" | "cookieStore"> = { ...options };
     delete (rest as ClientOptions).cookies;
