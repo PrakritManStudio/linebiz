@@ -6,8 +6,13 @@ import type { Hooks } from "./core/http.js";
 import { DEFAULT_BASE_URLS, DEFAULT_CLIENT_VERSION, DEFAULT_USER_AGENT } from "./core/services.js";
 import type { Service } from "./core/services.js";
 import { Validator } from "./core/validate.js";
+import { AuthResource } from "./resources/auth.js";
 import { BotsResource } from "./resources/bots.js";
+import { ChatsResource } from "./resources/chats.js";
+import { ContactsResource } from "./resources/contacts.js";
 import { MeResource } from "./resources/me.js";
+import { MembersResource } from "./resources/members.js";
+import { MessagesResource } from "./resources/messages.js";
 import { OwnersResource } from "./resources/owners.js";
 import { TagsResource } from "./resources/tags.js";
 
@@ -101,6 +106,16 @@ export class LineBizClient {
   readonly owners: OwnersResource;
   /** Tags of a bot. */
   readonly tags: TagsResource;
+  /** Chats of a bot. */
+  readonly chats: ChatsResource;
+  /** Messages of a chat. */
+  readonly messages: MessagesResource;
+  /** Contacts of a bot. */
+  readonly contacts: ContactsResource;
+  /** Members of a group chat. */
+  readonly members: MembersResource;
+  /** Sign-out of the web session. */
+  readonly auth: AuthResource;
 
   /** @internal HTTP pipeline shared by the resources. */
   readonly _http: HttpClient;
@@ -142,6 +157,11 @@ export class LineBizClient {
     this.bots = new BotsResource(this);
     this.owners = new OwnersResource(this);
     this.tags = new TagsResource(this);
+    this.chats = new ChatsResource(this);
+    this.messages = new MessagesResource(this);
+    this.contacts = new ContactsResource(this);
+    this.members = new MembersResource(this);
+    this.auth = new AuthResource(this);
   }
 
   /**

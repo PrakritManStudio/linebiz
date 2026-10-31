@@ -28,4 +28,5 @@ export type {
   ErrorContext,
 } from "./core/http.js";
 export type { Service } from "./core/services.js";
+export type { ContactFilter, ContactSortBy, SortOrder } from "./resources/contacts.js";
 export type * from "./types/index.js";
