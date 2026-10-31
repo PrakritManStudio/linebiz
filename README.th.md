@@ -51,7 +51,7 @@ for await (const bot of client.bots.list()) {
 }
 ```
 
-ทุกเมธอดคืน Promise ที่ reject เมื่อผิดพลาด ไม่ throw แบบ sync (ยกเว้น constructor: option ที่ไม่ถูกต้องจะ throw `ConfigError`)
+ทุกเมธอดของ resource คืน Promise ที่ reject เมื่อผิดพลาด (รวมถึง argument ที่ไม่ถูกต้อง) ยกเว้น constructor และ `withOptions()` ที่จะ throw `ConfigError` แบบ sync เมื่อ option ไม่ถูกต้อง
 
 ## Cookies
 
@@ -76,7 +76,7 @@ new LineBizClient({
 new LineBizClient({ cookies: await readFile("cookies.json", "utf8") });
 ```
 
-string ที่ขึ้นต้นด้วย `[` จะถูก parse เป็น JSON ส่วน string อื่นถือเป็น Cookie header SDK เก็บเฉพาะ cookie ของ `line.biz` (หรือ `*.line.biz`) และตัด cookie ที่หมดอายุออก ถ้ารูปแบบผิดจะ throw `ConfigError` ที่มี code `INVALID_COOKIE` โดยบอกตำแหน่งที่ผิด (ไม่มีชื่อหรือค่าของ cookie ในข้อความ) cookie จะถูกส่งเฉพาะ domain, path และ scheme ที่ตรงกันเท่านั้น
+string ที่ขึ้นต้นด้วย `[` จะถูก parse เป็น JSON ส่วน string อื่นถือเป็น Cookie header SDK เก็บเฉพาะ cookie ของ `line.biz` (หรือ `*.line.biz`) และตัด cookie ที่หมดอายุออก ถ้ารูปแบบผิด (รวมถึงชื่อหรือค่าที่มี control character หรือ `;`) จะ throw `ConfigError` ที่มี code `INVALID_COOKIE` โดยบอกตำแหน่งที่ผิด (ไม่มีชื่อหรือค่าของ cookie ในข้อความ) cookie จะถูกส่งเฉพาะ domain, path และ scheme ที่ตรงกันเท่านั้น
 
 response อาจหมุนเวียน session ผ่าน `Set-Cookie` ซึ่ง `MemoryCookieStore` ที่มาพร้อม SDK จะอัปเดตให้เอง หากต้องการบันทึก session ปัจจุบัน:
 
@@ -146,28 +146,30 @@ const client = new LineBizClient({ cookieStore });
 
 ทุก option เป็น optional ยกเว้นต้องมี `cookies` หรือ `cookieStore` อย่างใดอย่างหนึ่ง
 
-| Option          | Type                               | ค่าเริ่มต้น                               | คำอธิบาย                                                                                                   |
-| --------------- | ---------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `cookies`       | `string \| CookieObject[]`         | -                                         | session cookie (header string, JSON string หรือ cookie object) ใช้ร่วมกับ `cookieStore` ไม่ได้             |
-| `cookieStore`   | `CookieStore`                      | -                                         | ที่เก็บ cookie แบบกำหนดเอง ใช้ร่วมกับ `cookies` ไม่ได้                                                     |
-| `baseURLs`      | `Partial<Record<Service, string>>` | chat/manager/account `https://*.line.biz` | เปลี่ยน base URL ของ service (`"chat"`, `"manager"`, `"account"`) เช่นชี้ไป mock server ต้องเป็น http(s)   |
-| `fetch`         | `typeof fetch`                     | `globalThis.fetch`                        | ใช้ `fetch` แบบกำหนดเอง                                                                                    |
-| `headers`       | `Record<string, string>`           | `{}`                                      | header เพิ่มเติมทุก request (override ค่าเริ่มต้นได้)                                                      |
-| `userAgent`     | `string`                           | Chrome user agent ปัจจุบัน                | header `User-Agent`                                                                                        |
-| `clientVersion` | `string`                           | `"20240513144702"`                        | ค่า header `x-oa-chat-client-version` (ส่งให้ service `chat`)                                              |
-| `timeout`       | `number`                           | `30000`                                   | timeout ของ request หน่วย ms (จำนวนเต็มบวก) นับต่อหนึ่งครั้งที่ลองส่ง                                      |
-| `maxRetries`    | `number`                           | `2`                                       | จำนวนครั้งที่ retry request **GET** ที่ล้มเหลว (จำนวนเต็ม 0-10) ดูด้านล่าง                                 |
-| `validate`      | `boolean`                          | `true`                                    | ตรวจ argument ฝั่ง client; `false` ข้ามเฉพาะการตรวจรูปแบบ ช่วงค่า และ enum (การตรวจชนิดข้อมูลยังทำงานเสมอ) |
-| `hooks`         | `Hooks`                            | `{}`                                      | callback `onRequest` / `onResponse` / `onError` ดู [Hooks](#hooks)                                         |
+| Option          | Type                               | ค่าเริ่มต้น                               | คำอธิบาย                                                                                                                      |
+| --------------- | ---------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `cookies`       | `string \| CookieObject[]`         | -                                         | session cookie (header string, JSON string หรือ cookie object) ใช้ร่วมกับ `cookieStore` ไม่ได้                                |
+| `cookieStore`   | `CookieStore`                      | -                                         | ที่เก็บ cookie แบบกำหนดเอง ใช้ร่วมกับ `cookies` ไม่ได้                                                                        |
+| `baseURLs`      | `Partial<Record<Service, string>>` | chat/manager/account `https://*.line.biz` | เปลี่ยน base URL ของ service (`"chat"`, `"manager"`, `"account"`) เช่นชี้ไป mock server (ดูหมายเหตุด้านล่าง) ต้องเป็น http(s) |
+| `fetch`         | `typeof fetch`                     | `globalThis.fetch`                        | ใช้ `fetch` แบบกำหนดเอง                                                                                                       |
+| `headers`       | `Record<string, string>`           | `{}`                                      | header เพิ่มเติมทุก request (override ค่าเริ่มต้นได้) header `Cookie` จะถูกปฏิเสธ ให้ใช้ `cookies` / `cookieStore` แทน        |
+| `userAgent`     | `string`                           | Chrome user agent ปัจจุบัน                | header `User-Agent`                                                                                                           |
+| `clientVersion` | `string`                           | `"20240513144702"`                        | ค่า header `x-oa-chat-client-version` (ส่งให้ service `chat`)                                                                 |
+| `timeout`       | `number`                           | `30000`                                   | timeout ของ request หน่วย ms (จำนวนเต็ม 1 ถึง 2147483647) นับต่อหนึ่งครั้งที่ลองส่ง                                           |
+| `maxRetries`    | `number`                           | `2`                                       | จำนวนครั้งที่ retry request **GET** ที่ล้มเหลว (จำนวนเต็ม 0-10) ดูด้านล่าง                                                    |
+| `validate`      | `boolean`                          | `true`                                    | ตรวจ argument ฝั่ง client; `false` ข้ามเฉพาะการตรวจรูปแบบ ช่วงค่า และ enum (การตรวจชนิดข้อมูลยังทำงานเสมอ)                    |
+| `hooks`         | `Hooks`                            | `{}`                                      | callback `onRequest` / `onResponse` / `onError` ดู [Hooks](#hooks)                                                            |
 
 option ที่ไม่ถูกต้องจะ throw `ConfigError` (code `INVALID_OPTIONS`) จาก constructor
+
+**Mock server และ cookie** `MemoryCookieStore` ค่าเริ่มต้นจะส่ง cookie เฉพาะ host ที่ตรงกับ domain ของ cookie (`*.line.biz`) ดังนั้น `baseURLs` ที่ไม่ใช่ LINE (เช่น `http://localhost:3000`) จะไม่ได้รับ cookie เว้นแต่จะส่ง `CookieStore` แบบกำหนดเอง และ cookie ต้องผ่าน `cookies` / `cookieStore` เสมอ: header `Cookie` ใน `headers` (ระดับ client หรือต่อการเรียก) จะถูกปฏิเสธ
 
 **Option ต่อการเรียก** พารามิเตอร์ตัวสุดท้ายของทุกเมธอดคือ `RequestOptions` (optional):
 
 ```ts
 interface RequestOptions {
   signal?: AbortSignal; // ยกเลิกการเรียก
-  timeout?: number; // override timeout ของ client (ms)
+  timeout?: number; // override timeout ของ client (ms, จำนวนเต็ม 1 ถึง 2147483647)
   headers?: Record<string, string>; // override/เพิ่ม header เฉพาะการเรียกนี้
 }
 
@@ -177,7 +179,7 @@ await client.bots.retrieve(botId, { signal: controller.signal, timeout: 5_000 })
 
 สำหรับเมธอดที่แบ่งหน้า option เหล่านี้ใช้กับทุก request ของแต่ละหน้า ลำดับความสำคัญของ header: ค่าเริ่มต้นของ SDK < `headers` ของ client < `headers` ต่อการเรียก
 
-**Retry** retry เฉพาะ request `GET` และเฉพาะเมื่อเกิด network error, timeout หรือ HTTP 408 / 429 / 5xx ระยะหน่วงเป็น exponential backoff (`min(0.5s * 2^attempt, 8s)` บวก/ลบ jitter 25%) และเคารพ header `Retry-After` (วินาทีหรือ HTTP date, สูงสุด 60 วินาที) การยกเลิกด้วย `AbortSignal` ของคุณจะไม่ถูก retry และ request `POST` (เช่น `auth.logout()`) จะไม่ถูก retry เลย
+**Retry** retry เฉพาะ request `GET` และเฉพาะเมื่อเกิด network error, timeout หรือ HTTP 408 / 429 / 5xx ระยะหน่วงเป็น exponential backoff (`min(0.5s * 2^attempt, 8s)` บวก/ลบ jitter 25%) และถ้า response ที่ retry ได้ (408 / 429 / 5xx) มี header `Retry-After` (วินาทีหรือ HTTP date, สูงสุด 60 วินาที) จะใช้ค่านั้นเป็นระยะหน่วงแทน การยกเลิกด้วย `AbortSignal` ของคุณจะไม่ถูก retry และ request `POST` (เช่น `auth.logout()`) จะไม่ถูก retry เลย
 
 **Client ที่ derive จากตัวเดิม** `client.withOptions({ ... })` คืน client ใหม่ที่เปลี่ยนบาง option (เปลี่ยนได้ทุกอย่างยกเว้น `cookies` / `cookieStore`) ตัวเดิมไม่ถูกแก้ไข และใช้ cookie store ร่วมกัน การ merge เป็นแบบ **shallow**: ถ้าส่งออบเจ็กต์ `headers`, `baseURLs` หรือ `hooks` มา ออบเจ็กต์นั้นจะ **แทนที่** ของเดิมทั้งก้อน ไม่ได้ merge เข้าด้วยกัน
 
@@ -277,7 +279,7 @@ const client = new LineBizClient({
 
 - `onRequest` ทำงานก่อนส่งทุกครั้ง (รวมครั้งที่ retry); ถ้า throw การเรียกจะ reject ด้วย error นั้น
 - `onResponse` ทำงานทุกครั้งที่ได้รับ response ไม่ว่า status ใด
-- `onError` ทำงานหนึ่งครั้งพร้อม error สุดท้ายเมื่อการเรียกล้มเหลว
+- `onError` ทำงานหนึ่งครั้งพร้อม error สุดท้ายที่เกิดภายใน HTTP pipeline (การสร้าง request, เครือข่าย, HTTP status, การ parse response) error ที่เกิดจากเมธอดของ resource เอง เช่นการตรวจ argument (`ValidationError`), รูปแบบ list ที่ไม่คาดคิด หรือไม่มี `logoutUri` จะไม่ถูกส่งให้ hook
 - error ที่ throw จาก `onResponse` และ `onError` จะถูกละเลย
 
 ## Resources

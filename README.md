@@ -51,7 +51,7 @@ for await (const bot of client.bots.list()) {
 }
 ```
 
-Every method returns a Promise that rejects on failure; none throw synchronously (the constructor is the exception: invalid options throw a `ConfigError`).
+Every resource method returns a Promise that rejects on failure (including invalid arguments). The constructor and `withOptions()` are the exceptions: they throw a `ConfigError` synchronously for invalid options.
 
 ## Cookies
 
@@ -76,7 +76,7 @@ new LineBizClient({
 new LineBizClient({ cookies: await readFile("cookies.json", "utf8") });
 ```
 
-A string that starts with `[` is parsed as JSON; any other string is a Cookie header. Only cookies for `line.biz` (or `*.line.biz`) are kept, and expired cookies are dropped. Malformed input throws a `ConfigError` with code `INVALID_COOKIE` that names the offending entry (it never contains cookie names or values). Cookies are only sent to matching domains, paths and schemes.
+A string that starts with `[` is parsed as JSON; any other string is a Cookie header. Only cookies for `line.biz` (or `*.line.biz`) are kept, and expired cookies are dropped. Malformed input (including names or values with control characters or `;`) throws a `ConfigError` with code `INVALID_COOKIE` that names the offending entry (it never contains cookie names or values). Cookies are only sent to matching domains, paths and schemes.
 
 Responses can rotate the session (`Set-Cookie`); the built-in `MemoryCookieStore` applies those updates. To save the current session:
 
@@ -146,28 +146,30 @@ Provide exactly one of `cookies` and `cookieStore`.
 
 All options are optional except that exactly one of `cookies` / `cookieStore` is required.
 
-| Option          | Type                               | Default                                   | Description                                                                                                      |
-| --------------- | ---------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `cookies`       | `string \| CookieObject[]`         | -                                         | Session cookies (header string, JSON string, or cookie objects). Mutually exclusive with `cookieStore`.          |
-| `cookieStore`   | `CookieStore`                      | -                                         | Custom cookie storage. Mutually exclusive with `cookies`.                                                        |
-| `baseURLs`      | `Partial<Record<Service, string>>` | chat/manager/account `https://*.line.biz` | Override a service base URL (`"chat"`, `"manager"`, `"account"`), e.g. for a mock server. Must be http(s).       |
-| `fetch`         | `typeof fetch`                     | `globalThis.fetch`                        | Custom `fetch` implementation.                                                                                   |
-| `headers`       | `Record<string, string>`           | `{}`                                      | Extra headers on every request (override the defaults).                                                          |
-| `userAgent`     | `string`                           | A current Chrome user agent               | `User-Agent` header.                                                                                             |
-| `clientVersion` | `string`                           | `"20240513144702"`                        | Value of the `x-oa-chat-client-version` header (sent to the `chat` service).                                     |
-| `timeout`       | `number`                           | `30000`                                   | Request timeout in ms (positive integer). Applies per attempt.                                                   |
-| `maxRetries`    | `number`                           | `2`                                       | Retries for failed **GET** requests, integer 0-10. See below.                                                    |
-| `validate`      | `boolean`                          | `true`                                    | Validate arguments on the client side. `false` skips format, range and enum checks only; type checks always run. |
-| `hooks`         | `Hooks`                            | `{}`                                      | `onRequest` / `onResponse` / `onError` callbacks. See [Hooks](#hooks).                                           |
+| Option          | Type                               | Default                                   | Description                                                                                                                     |
+| --------------- | ---------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `cookies`       | `string \| CookieObject[]`         | -                                         | Session cookies (header string, JSON string, or cookie objects). Mutually exclusive with `cookieStore`.                         |
+| `cookieStore`   | `CookieStore`                      | -                                         | Custom cookie storage. Mutually exclusive with `cookies`.                                                                       |
+| `baseURLs`      | `Partial<Record<Service, string>>` | chat/manager/account `https://*.line.biz` | Override a service base URL (`"chat"`, `"manager"`, `"account"`), e.g. for a mock server (see the note below). Must be http(s). |
+| `fetch`         | `typeof fetch`                     | `globalThis.fetch`                        | Custom `fetch` implementation.                                                                                                  |
+| `headers`       | `Record<string, string>`           | `{}`                                      | Extra headers on every request (override the defaults). A `Cookie` header is rejected; use `cookies` / `cookieStore`.           |
+| `userAgent`     | `string`                           | A current Chrome user agent               | `User-Agent` header.                                                                                                            |
+| `clientVersion` | `string`                           | `"20240513144702"`                        | Value of the `x-oa-chat-client-version` header (sent to the `chat` service).                                                    |
+| `timeout`       | `number`                           | `30000`                                   | Request timeout in ms (integer, 1 to 2147483647). Applies per attempt.                                                          |
+| `maxRetries`    | `number`                           | `2`                                       | Retries for failed **GET** requests, integer 0-10. See below.                                                                   |
+| `validate`      | `boolean`                          | `true`                                    | Validate arguments on the client side. `false` skips format, range and enum checks only; type checks always run.                |
+| `hooks`         | `Hooks`                            | `{}`                                      | `onRequest` / `onResponse` / `onError` callbacks. See [Hooks](#hooks).                                                          |
 
 Invalid options throw a `ConfigError` (code `INVALID_OPTIONS`) from the constructor.
+
+**Mock servers and cookies.** The default `MemoryCookieStore` only sends cookies to hosts that match the cookies' domains (`*.line.biz`), so a non-LINE `baseURLs` entry (for example `http://localhost:3000`) receives no cookies unless you pass a custom `CookieStore`. Cookies must always go through `cookies` / `cookieStore`: a `Cookie` header in `headers` (client or per call) is rejected.
 
 **Per-call options.** The last parameter of every method is an optional `RequestOptions`:
 
 ```ts
 interface RequestOptions {
   signal?: AbortSignal; // abort the call
-  timeout?: number; // override the client timeout (ms)
+  timeout?: number; // override the client timeout (ms, integer 1 to 2147483647)
   headers?: Record<string, string>; // override/add headers for this call
 }
 
@@ -177,7 +179,7 @@ await client.bots.retrieve(botId, { signal: controller.signal, timeout: 5_000 })
 
 For paginated calls the options apply to every page request. Header precedence: SDK defaults < client `headers` < per-call `headers`.
 
-**Retries.** Only `GET` requests are retried, and only after a network error, a timeout, or HTTP 408 / 429 / 5xx. The delay is exponential backoff (`min(0.5s * 2^attempt, 8s)`, +/-25% jitter); a `Retry-After` header (seconds or HTTP date, capped at 60 s) is honored. Aborting with your own `AbortSignal` is never retried, and `POST` requests (such as `auth.logout()`) are never retried.
+**Retries.** Only `GET` requests are retried, and only after a network error, a timeout, or HTTP 408 / 429 / 5xx. The delay is exponential backoff (`min(0.5s * 2^attempt, 8s)`, +/-25% jitter); when a retryable response carries a `Retry-After` header (any of 408 / 429 / 5xx; seconds or HTTP date, capped at 60 s), that delay is used instead. Aborting with your own `AbortSignal` is never retried, and `POST` requests (such as `auth.logout()`) are never retried.
 
 **Derived clients.** `client.withOptions({ ... })` returns a new client with some options changed (anything except `cookies` / `cookieStore`); the original is untouched and the cookie store is shared. The merge is **shallow**: a `headers`, `baseURLs` or `hooks` object you pass replaces the original object instead of being merged into it.
 
@@ -277,7 +279,7 @@ const client = new LineBizClient({
 
 - `onRequest` runs before every attempt (including retries); if it throws, the call rejects with that error.
 - `onResponse` runs for every received response, whatever the status.
-- `onError` runs once with the final error when a call fails.
+- `onError` runs once with the final error raised inside the HTTP pipeline (request building, network, HTTP status, response parsing). Errors raised by a resource method itself, such as argument validation (`ValidationError`), unexpected list shapes or a missing `logoutUri`, are not reported to hooks.
 - Errors thrown by `onResponse` and `onError` are ignored.
 
 ## Resources
