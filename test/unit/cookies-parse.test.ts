@@ -172,4 +172,51 @@ describe("parseCookieInput", () => {
       expect((e as Error).message).not.toContain("secretvalue123");
     }
   });
+
+  describe("control characters and separators", () => {
+    const SECRET = "SECRET123";
+    function failure(input: unknown): ConfigError {
+      try {
+        parseCookieInput(input, NOW);
+      } catch (error) {
+        return error as ConfigError;
+      }
+      throw new Error("expected parseCookieInput to throw");
+    }
+    function expectNoLeak(err: ConfigError): void {
+      expect(err).toBeInstanceOf(ConfigError);
+      expect(err.code).toBe("INVALID_COOKIE");
+      expect(err.message).not.toContain(SECRET);
+      expect(String(err)).not.toContain(SECRET);
+      expect(err.cause).toBeUndefined();
+    }
+
+    it("header string: newline inside a value names the position only", () => {
+      const err = failure(`ok=1; ses=${SECRET}\nother=x`);
+      expectNoLeak(err);
+      expect(err.message).toMatch(/position 1/);
+    });
+
+    it("header string: control character or whitespace in a name", () => {
+      expectNoLeak(failure(`a\u0001b=${SECRET}`));
+      expectNoLeak(failure(`a b=${SECRET}`));
+      expectNoLeak(failure(`a=${SECRET}\u007fx`));
+    });
+
+    it("JSON string: control characters are rejected without the value", () => {
+      const err = failure(JSON.stringify([{ name: "ses", value: `${SECRET}\r\nX: y` }]));
+      expectNoLeak(err);
+      expect(err.message).toMatch(/cookies\[0\]\.value/);
+      expectNoLeak(failure(JSON.stringify([{ name: `a${SECRET}\n`, value: "1" }])));
+    });
+
+    it("array: ';' in a value, '=' / whitespace / empty name are rejected", () => {
+      const err = failure([{ name: "ses", value: `${SECRET}; Domain=evil` }]);
+      expectNoLeak(err);
+      expect(err.message).toMatch(/cookies\[0\]\.value/);
+      expectNoLeak(failure([{ name: `a=${SECRET}`, value: "1" }]));
+      expectNoLeak(failure([{ name: `a ${SECRET}`, value: "1" }]));
+      expectNoLeak(failure([{ name: "", value: SECRET }]));
+    });
+  });
 });

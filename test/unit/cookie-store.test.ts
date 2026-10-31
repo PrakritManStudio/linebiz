@@ -194,4 +194,16 @@ describe("MemoryCookieStore", () => {
     );
     expect(s.toJSON().map((c) => c.domain)).toEqual([".line.biz", "chat.line.biz"]);
   });
+
+  it("silently ignores Set-Cookie with control characters or invalid names", () => {
+    const s = new MemoryCookieStore("ses=1", { now });
+    s.setCookies(chat, [
+      "bad=a\u0001b; Path=/",
+      "bad2=a\rb",
+      "bad name=1",
+      "a\nb=1",
+      "good=2; Path=/",
+    ]);
+    expect(s.getCookieHeader(chat)).toBe("ses=1; good=2");
+  });
 });

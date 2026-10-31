@@ -39,6 +39,25 @@ function fail(message: string): never {
   throw new ConfigError(message, { code: "INVALID_COOKIE" });
 }
 
+/** Whether `text` contains a control character (0x00-0x1F, 0x7F), which no cookie part may hold. */
+function hasControlChar(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+
+/** A cookie name must be non-empty and free of control characters, `;`, `=` and whitespace. */
+function isValidCookieName(name: string): boolean {
+  return name !== "" && !hasControlChar(name) && !/[;=\s]/.test(name);
+}
+
+/** A cookie value must be free of control characters and `;`. */
+function isValidCookieValue(value: string): boolean {
+  return !hasControlChar(value) && !value.includes(";");
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -50,9 +69,14 @@ function parseHeader(input: string): CookieObject[] {
     if (pair === "") return;
     const eq = pair.indexOf("=");
     if (eq <= 0) fail(`Invalid cookie pair at position ${String(index)}`);
+    const name = pair.slice(0, eq).trim();
+    const value = pair.slice(eq + 1).trim();
+    if (!isValidCookieName(name) || !isValidCookieValue(value)) {
+      fail(`Invalid cookie pair at position ${String(index)}: illegal character in name or value`);
+    }
     cookies.push({
-      name: pair.slice(0, eq).trim(),
-      value: pair.slice(eq + 1).trim(),
+      name,
+      value,
       domain: DEFAULT_DOMAIN,
       path: DEFAULT_PATH,
     });
@@ -101,6 +125,14 @@ function normalizeEntry(entry: unknown, index: number): CookieObject {
   if (typeof name !== "string") fail(`cookies[${String(index)}].name must be a string`);
   const value = entry.value;
   if (typeof value !== "string") fail(`cookies[${String(index)}].value must be a string`);
+  if (!isValidCookieName(name)) {
+    fail(
+      `cookies[${String(index)}].name must be non-empty without control characters, ";", "=" or whitespace`,
+    );
+  }
+  if (!isValidCookieValue(value)) {
+    fail(`cookies[${String(index)}].value must not contain control characters or ";"`);
+  }
 
   let domain = optionalString(entry, index, "domain") ?? DEFAULT_DOMAIN;
   if (entry.hostOnly === true) domain = domain.replace(/^\./, "");
@@ -140,7 +172,8 @@ function isLineBizDomain(domain: string | undefined): boolean {
  * @param now Current time in milliseconds since the epoch (defaults to `Date.now()`).
  * @returns The normalized cookies, never empty.
  * @throws {ConfigError} With code `INVALID_COOKIE` when the input is malformed or yields no usable cookie.
- *   Messages never contain cookie names or values.
+ *   Cookie names and values containing control characters or `;` (and names containing `=` or
+ *   whitespace) are rejected. Messages never contain cookie names or values.
  */
 export function parseCookieInput(input: unknown, now: number = Date.now()): CookieObject[] {
   let parsed: unknown = input;
@@ -297,8 +330,8 @@ export class MemoryCookieStore implements CookieStore {
     const eq = pair.indexOf("=");
     if (eq < 0) return;
     const name = pair.slice(0, eq).trim();
-    if (name === "") return;
     const value = pair.slice(eq + 1).trim();
+    if (!isValidCookieName(name) || !isValidCookieValue(value)) return;
 
     let domainAttr: string | undefined;
     let pathAttr: string | undefined;
