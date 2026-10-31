@@ -82,20 +82,18 @@ describe("MemoryCookieStore", () => {
   });
 
   it("Max-Age=0 deletes", () => {
-    const s = new MemoryCookieStore(
-      [{ name: "ses", value: "1", domain: ".line.biz", path: "/" }],
-      { now },
-    );
+    const s = new MemoryCookieStore([{ name: "ses", value: "1", domain: ".line.biz", path: "/" }], {
+      now,
+    });
     s.setCookies(chat, ["ses=; Domain=.line.biz; Path=/; Max-Age=0"]);
     expect(s.getCookieHeader(chat)).toBe("");
     expect(s.toJSON()).toEqual([]);
   });
 
   it("Expires in the past deletes", () => {
-    const s = new MemoryCookieStore(
-      [{ name: "ses", value: "1", domain: ".line.biz", path: "/" }],
-      { now },
-    );
+    const s = new MemoryCookieStore([{ name: "ses", value: "1", domain: ".line.biz", path: "/" }], {
+      now,
+    });
     s.setCookies(chat, ["ses=; Domain=line.biz; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT"]);
     expect(s.toJSON()).toEqual([]);
   });
@@ -159,7 +157,9 @@ describe("MemoryCookieStore", () => {
 
   it("attributes are case-insensitive and SameSite is normalized", () => {
     const s = new MemoryCookieStore(undefined, { now });
-    s.setCookies(chat, ["a=1; DOMAIN=Line.Biz; PATH=/; SECURE; httponly; samesite=lax; MAX-AGE=60"]);
+    s.setCookies(chat, [
+      "a=1; DOMAIN=Line.Biz; PATH=/; SECURE; httponly; samesite=lax; MAX-AGE=60",
+    ]);
     expect(s.toJSON()).toEqual([
       {
         name: "a",

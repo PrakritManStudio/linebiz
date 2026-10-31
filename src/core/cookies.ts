@@ -341,7 +341,10 @@ export class MemoryCookieStore implements CookieStore {
     }
 
     const host = url.hostname.toLowerCase();
-    if (domainAttr !== undefined && (!domainAttr.includes(".") || !domainMatches(host, domainAttr))) {
+    if (
+      domainAttr !== undefined &&
+      (!domainAttr.includes(".") || !domainMatches(host, domainAttr))
+    ) {
       return;
     }
 
