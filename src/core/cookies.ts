@@ -157,3 +157,233 @@ export function parseCookieInput(input: unknown, now: number = Date.now()): Cook
   if (cookies.length === 0) fail("No cookies for *.line.biz found");
   return cookies;
 }
+
+interface StoredCookie {
+  name: string;
+  value: string;
+  /** Lowercase domain without a leading dot. */
+  domain: string;
+  hostOnly: boolean;
+  path: string;
+  /** Expiry in milliseconds since the epoch; `undefined` for session cookies. */
+  expiresAt: number | undefined;
+  secure: boolean;
+  httpOnly: boolean;
+  sameSite: CookieObject["sameSite"];
+}
+
+function cookieKey(name: string, domain: string, path: string): string {
+  return `${name}\u0000${domain}\u0000${path}`;
+}
+
+function domainMatches(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+function pathMatches(requestPath: string, cookiePath: string): boolean {
+  if (cookiePath === "/" || requestPath === cookiePath) return true;
+  if (!requestPath.startsWith(cookiePath)) return false;
+  return cookiePath.endsWith("/") || requestPath.charAt(cookiePath.length) === "/";
+}
+
+function defaultPath(pathname: string): string {
+  if (!pathname.startsWith("/")) return "/";
+  const last = pathname.lastIndexOf("/");
+  return last <= 0 ? "/" : pathname.slice(0, last);
+}
+
+/**
+ * In-memory, domain-aware cookie jar implementing a subset of RFC 6265.
+ *
+ * It is the default {@link CookieStore} of the client. Cookies are only returned for
+ * matching hosts, paths and schemes, and are updated from `Set-Cookie` response headers.
+ */
+export class MemoryCookieStore implements CookieStore {
+  readonly #cookies = new Map<string, StoredCookie>();
+  readonly #now: () => number;
+
+  /**
+   * @param input Initial cookies; omit to start with an empty store.
+   * @param options Optional clock override (milliseconds since the epoch), mainly for tests.
+   * @throws {ConfigError} With code `INVALID_COOKIE` when `input` is given but unusable.
+   */
+  constructor(input?: CookieInput, options?: { now?: () => number }) {
+    this.#now = options?.now ?? Date.now;
+    if (input === undefined) return;
+    for (const c of parseCookieInput(input, this.#now())) {
+      const hostOnly = !(c.domain ?? DEFAULT_DOMAIN).startsWith(".");
+      const domain = (c.domain ?? DEFAULT_DOMAIN).replace(/^\./, "").toLowerCase();
+      const path = c.path ?? DEFAULT_PATH;
+      this.#cookies.set(cookieKey(c.name, domain, path), {
+        name: c.name,
+        value: c.value,
+        domain,
+        hostOnly,
+        path,
+        expiresAt: c.expires !== undefined && c.expires > 0 ? c.expires * 1000 : undefined,
+        secure: c.secure === true,
+        httpOnly: c.httpOnly === true,
+        sameSite: c.sameSite,
+      });
+    }
+  }
+
+  /**
+   * Builds the `Cookie` header value for a request URL.
+   *
+   * @param url The request URL.
+   * @returns `name=value` pairs joined by `"; "` (longest path first), or `""` when none match.
+   */
+  getCookieHeader(url: URL): string {
+    this.#purgeExpired();
+    const host = url.hostname.toLowerCase();
+    const requestPath = url.pathname === "" ? "/" : url.pathname;
+    const secureRequest = url.protocol === "https:";
+    return [...this.#cookies.values()]
+      .filter(
+        (c) =>
+          (c.hostOnly ? host === c.domain : domainMatches(host, c.domain)) &&
+          pathMatches(requestPath, c.path) &&
+          (!c.secure || secureRequest),
+      )
+      .sort((a, b) => b.path.length - a.path.length)
+      .map((c) => `${c.name}=${c.value}`)
+      .join("; ");
+  }
+
+  /**
+   * Applies `Set-Cookie` header values received in a response from `url`.
+   * Malformed or disallowed entries are ignored; this method never throws.
+   *
+   * @param url The URL the response came from.
+   * @param setCookie Raw `Set-Cookie` header values.
+   */
+  setCookies(url: URL, setCookie: string[]): void {
+    for (const header of setCookie) this.#applySetCookie(url, header);
+  }
+
+  /**
+   * Exports the unexpired cookies.
+   *
+   * @returns Cookie objects; domain cookies have a leading dot, host-only cookies do not.
+   *   `expires` is in seconds, or `-1` for session cookies.
+   */
+  toJSON(): CookieObject[] {
+    this.#purgeExpired();
+    return [...this.#cookies.values()].map((c) => {
+      const out: CookieObject = {
+        name: c.name,
+        value: c.value,
+        domain: c.hostOnly ? c.domain : `.${c.domain}`,
+        path: c.path,
+        expires: c.expiresAt === undefined ? -1 : c.expiresAt / 1000,
+        secure: c.secure,
+        httpOnly: c.httpOnly,
+      };
+      if (c.sameSite !== undefined) out.sameSite = c.sameSite;
+      return out;
+    });
+  }
+
+  #purgeExpired(): void {
+    const now = this.#now();
+    for (const [key, c] of this.#cookies) {
+      if (c.expiresAt !== undefined && c.expiresAt <= now) this.#cookies.delete(key);
+    }
+  }
+
+  #applySetCookie(url: URL, header: string): void {
+    const [pair = "", ...attributes] = header.split(";");
+    const eq = pair.indexOf("=");
+    if (eq < 0) return;
+    const name = pair.slice(0, eq).trim();
+    if (name === "") return;
+    const value = pair.slice(eq + 1).trim();
+
+    let domainAttr: string | undefined;
+    let pathAttr: string | undefined;
+    let maxAge: number | undefined;
+    let expires: number | undefined;
+    let secure = false;
+    let httpOnly = false;
+    let sameSite: CookieObject["sameSite"];
+    for (const attribute of attributes) {
+      const idx = attribute.indexOf("=");
+      const key = (idx < 0 ? attribute : attribute.slice(0, idx)).trim().toLowerCase();
+      const attrValue = idx < 0 ? "" : attribute.slice(idx + 1).trim();
+      switch (key) {
+        case "domain":
+          if (attrValue !== "") domainAttr = attrValue.replace(/^\./, "").toLowerCase();
+          break;
+        case "path":
+          if (attrValue.startsWith("/")) pathAttr = attrValue;
+          break;
+        case "max-age":
+          if (/^-?\d+$/.test(attrValue)) maxAge = Number(attrValue);
+          break;
+        case "expires": {
+          const parsed = Date.parse(attrValue);
+          if (!Number.isNaN(parsed)) expires = parsed;
+          break;
+        }
+        case "secure":
+          secure = true;
+          break;
+        case "httponly":
+          httpOnly = true;
+          break;
+        case "samesite":
+          sameSite = normalizeSameSite(attrValue);
+          break;
+        default:
+          break;
+      }
+    }
+
+    const host = url.hostname.toLowerCase();
+    if (domainAttr !== undefined && (!domainAttr.includes(".") || !domainMatches(host, domainAttr))) {
+      return;
+    }
+
+    const lowerName = name.toLowerCase();
+    if (lowerName.startsWith("__secure-") && !secure) return;
+    if (
+      lowerName.startsWith("__host-") &&
+      (!secure || domainAttr !== undefined || pathAttr !== "/")
+    ) {
+      return;
+    }
+
+    const domain = domainAttr ?? host;
+    const path = pathAttr ?? defaultPath(url.pathname);
+    const key = cookieKey(name, domain, path);
+    const now = this.#now();
+
+    let expiresAt: number | undefined;
+    if (maxAge !== undefined) {
+      if (maxAge <= 0) {
+        this.#cookies.delete(key);
+        return;
+      }
+      expiresAt = now + maxAge * 1000;
+    } else if (expires !== undefined) {
+      if (expires <= now) {
+        this.#cookies.delete(key);
+        return;
+      }
+      expiresAt = expires;
+    }
+
+    this.#cookies.set(key, {
+      name,
+      value,
+      domain,
+      hostOnly: domainAttr === undefined,
+      path,
+      expiresAt,
+      secure,
+      httpOnly,
+      sameSite,
+    });
+  }
+}
