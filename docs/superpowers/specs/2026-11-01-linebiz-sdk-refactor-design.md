@@ -1,7 +1,7 @@
 # LineBiz SDK Refactor — Design Spec
 
 - **วันที่:** 2026-11-01
-- **สถานะ:** รอ review
+- **สถานะ:** อนุมัติแล้ว (2026-11-01)
 - **แพ็กเกจเดิม:** `@prakrit_m/lineweb@1.0.0-beta.6`
 - **แพ็กเกจใหม่:** `@prakrit_m/linebiz@0.1.0`
 
@@ -273,6 +273,12 @@ assertEnum(param, value, allowed)
 - **GitHub Actions `ci.yml`** (push/PR): pnpm install (frozen lockfile) → lint → typecheck → test (matrix Node 22/24/26) → build (publint + attw)
 - **`release.yml`**: Changesets action สร้าง Version PR; เมื่อ merge → `pnpm publish` ผ่าน npm Trusted Publishing (OIDC) + provenance; Changesets ตั้ง `changelog: false`, release notes เขียนใน GitHub Releases
 - **เอกสาร:** `README.md` (อังกฤษ: install, quick start, client options, cookies & CookieStore, pagination, errors, unofficial/ToS disclaimer) และ `README.th.md`; JSDoc ภาษาอังกฤษบนทุก public API; ย้าย `FUNDING.yml` → `.github/FUNDING.yml`
+
+## 14a. License
+
+- คง **ISC**; `package.json` `"license": "ISC"`
+- ไฟล์ `LICENSE` ไม่ระบุชื่อบุคคล: บรรทัด copyright เป็น `Copyright (c) 2025-2026 linebiz contributors` (ISC อ้างถึง "the above copyright notice" จึงคงบรรทัดนี้ไว้แบบไม่ระบุชื่อ)
+- เพิ่ม `THIRD_PARTY_NOTICES.md` (ใส่ใน `files` ของ package) แนบ Apache-2.0 notice ของ `@line/bot-sdk` สำหรับ type ที่ถูก inline ลง `.d.ts` — ถ้าตรวจแล้ว `.d.ts` ไม่มี type จาก bot-sdk ให้ตัดไฟล์นี้ทิ้ง
 
 ## 15. Rollout
 
