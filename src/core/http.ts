@@ -1,13 +1,17 @@
 import type { CookieStore } from "./cookies.js";
 import {
   APIError,
+  AbortError,
   ConnectionError,
+  RateLimitError,
+  TimeoutError,
   UnexpectedResponseError,
   isLineBizError,
   redactHeaders,
   truncateBody,
 } from "./errors.js";
 import type { LineBizError } from "./errors.js";
+import { backoffDelay, isRetryableStatus } from "./retry.js";
 import { isAllowedAbsoluteURL } from "./services.js";
 import type { Service } from "./services.js";
 
@@ -162,6 +166,31 @@ async function safeHook(call: (() => void | Promise<void>) | undefined): Promise
   }
 }
 
+/** Default {@link HttpConfig.sleep}: a timer that rejects with {@link AbortError} when `signal` aborts. */
+function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted === true) {
+      reject(new AbortError("Request aborted", { cause: signal.reason }));
+      return;
+    }
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(new AbortError("Request aborted", { cause: signal?.reason }));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/** Whether a failed GET attempt may be retried. */
+function isRetryable(error: unknown): boolean {
+  if (error instanceof ConnectionError) return true;
+  return error instanceof APIError && isRetryableStatus(error.status);
+}
+
 /** Everything about a call that stays constant across attempts. */
 interface PreparedRequest {
   desc: RequestDescriptor;
@@ -218,7 +247,24 @@ export class HttpClient {
         url: prepared.url.toString(),
         headers: redactHeaders(Object.fromEntries(headers)),
       };
-      return await this.attempt<T>(prepared, 0, state);
+      const sleep = this.config.sleep ?? defaultSleep;
+      for (let n = 0; ; n++) {
+        try {
+          return await this.attempt<T>(prepared, n, state);
+        } catch (error) {
+          const retry =
+            desc.method === "GET" &&
+            n < this.config.maxRetries &&
+            state.hookError?.error !== error &&
+            isRetryable(error);
+          if (!retry) throw error;
+          const delay =
+            error instanceof RateLimitError && error.retryAfter !== undefined
+              ? error.retryAfter
+              : backoffDelay(n);
+          await sleep(delay, options.signal);
+        }
+      }
     } catch (error) {
       if (isLineBizError(error) && state.hookError?.error !== error) {
         const ctx = state.ctx;
@@ -228,7 +274,7 @@ export class HttpClient {
     }
   }
 
-  /** Perform exactly one attempt. A retry loop can wrap this method. */
+  /** Perform exactly one attempt; {@link HttpClient.request} wraps it in the retry loop. */
   private async attempt<T>(
     { desc, options, url, headers: baseHeaders }: PreparedRequest,
     attempt: number,
@@ -237,6 +283,31 @@ export class HttpClient {
     const { config } = this;
     const method = desc.method;
     const urlString = url.toString();
+
+    delete state.hookError;
+    const abortedError = (): AbortError =>
+      new AbortError(`Request aborted: ${method} ${urlString}`, { cause: options.signal?.reason });
+    if (options.signal?.aborted === true) throw abortedError();
+
+    const timeoutMs = options.timeout ?? config.timeout;
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal =
+      options.signal === undefined
+        ? timeoutSignal
+        : AbortSignal.any([options.signal, timeoutSignal]);
+    // A failed fetch / body read is an abort, a timeout or a plain connection failure.
+    const classify = (cause: unknown): LineBizError => {
+      if (options.signal?.aborted === true) return abortedError();
+      if (timeoutSignal.aborted) {
+        return new TimeoutError(
+          `Request timed out after ${String(timeoutMs)}ms: ${method} ${urlString}`,
+          {
+            cause,
+          },
+        );
+      }
+      return new ConnectionError(`Request failed: ${method} ${urlString}`, { cause });
+    };
 
     const headers = new Headers(baseHeaders);
     const cookie = await config.cookieStore.getCookieHeader(url);
@@ -256,16 +327,15 @@ export class HttpClient {
       throw error;
     }
 
-    const init: RequestInit = { method, headers, redirect: "manual" };
+    const init: RequestInit = { method, headers, redirect: "manual", signal };
     if (desc.body !== undefined) init.body = JSON.stringify(desc.body);
-    if (options.signal !== undefined) init.signal = options.signal;
 
     const started = performance.now();
     let response: Response;
     try {
       response = await config.fetch(urlString, init);
     } catch (cause) {
-      throw new ConnectionError(`Request failed: ${method} ${urlString}`, { cause });
+      throw classify(cause);
     }
     const durationMs = performance.now() - started;
     const { status } = response;
@@ -298,7 +368,7 @@ export class HttpClient {
     try {
       text = await response.text();
     } catch (cause) {
-      throw new ConnectionError(`Request failed: ${method} ${urlString}`, { cause });
+      throw classify(cause);
     }
 
     if (status < 200 || status >= 300) {
