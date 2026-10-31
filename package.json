@@ -1,50 +1,35 @@
 {
-  "name": "@prakrit_m/lineweb",
-  "version": "1.0.0-beta.6",
-  "description": "Unofficial TypeScript client for LINE OA Web/Inbox (chat.line.biz)",
+  "name": "@prakrit_m/linebiz",
+  "version": "0.1.0",
+  "description": "Unofficial TypeScript client for LINE OA web APIs (chat.line.biz)",
   "type": "module",
-  "files": [
-    "dist"
-  ],
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
-    },
-    "./type": {
-      "types": "./dist/type/index.d.ts",
-      "import": "./dist/type/index.js",
-      "require": "./dist/type/index.cjs"
-    }
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=22"
   },
+  "files": [
+    "dist",
+    "THIRD_PARTY_NOTICES.md"
+  ],
   "sideEffects": false,
   "scripts": {
-    "dev": "tsup --watch",
-    "build": "tsup",
-    "prepare": "npm run build",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
     "format": "prettier -w .",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "prepublishOnly": "npm run build && npm run test"
-  },
-  "engines": {
-    "node": ">=18.18"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "prepublishOnly": "pnpm check"
   },
   "keywords": [
     "line",
     "line oa",
-    "line business",
-    "inbox",
+    "line official account",
     "chat.line.biz",
     "sdk",
     "typescript",
-    "axios",
     "unofficial"
   ],
   "author": "Prakrit M.",
@@ -54,24 +39,31 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PrakritManStudio/lineweb.git"
+    "url": "git+https://github.com/PrakritManStudio/linebiz.git"
   },
   "bugs": {
-    "url": "https://github.com/PrakritManStudio/lineweb/issues"
+    "url": "https://github.com/PrakritManStudio/linebiz/issues"
   },
-  "homepage": "https://github.com/PrakritManStudio/lineweb#readme",
-  "dependencies": {
-    "axios": "^1.11.0"
-  },
+  "homepage": "https://github.com/PrakritManStudio/linebiz#readme",
   "devDependencies": {
-    "@line/bot-sdk": "^10.2.0",
-    "@types/node": "^24.3.0",
-    "@typescript-eslint/eslint-plugin": "^8.41.0",
-    "@typescript-eslint/parser": "^8.41.0",
-    "eslint": "^9.34.0",
-    "prettier": "^3.6.2",
-    "tsup": "^8.5.0",
-    "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "@arethetypeswrong/core": "^0.18.5",
+    "@eslint/js": "^10.0.1",
+    "@line/bot-sdk": "^11.4.0",
+    "@types/node": "^22.20.5",
+    "eslint": "^10.14.0",
+    "prettier": "^3.9.10",
+    "publint": "^0.3.25",
+    "tsdown": "~0.23.4",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./types": "./dist/types/index.js",
+    "./package.json": "./package.json"
+  },
+  "inlinedDependencies": {
+    "@line/bot-sdk": "11.4.0"
   }
 }

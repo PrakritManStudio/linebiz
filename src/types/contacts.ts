@@ -1,4 +1,5 @@
-interface UserProfile {
+/** Profile of a user contact. */
+export interface ContactUserProfile {
   userId: string;
   name: string;
   friend: boolean;
@@ -6,16 +7,18 @@ interface UserProfile {
   iconHash: string;
 }
 
-interface GroupProfile {
+/** Profile of a group contact. */
+export interface ContactGroupProfile {
   groupId: string;
   name: string;
   count: number;
   iconHash: string;
 }
 
+/** A contact (user or group) of the bot. */
 export interface Contact {
   contactId: string;
-  profile: UserProfile | GroupProfile;
+  profile: ContactUserProfile | ContactGroupProfile;
   tagIds: string[];
   autoTagIds: string[];
   done: boolean;
@@ -27,8 +30,3 @@ export interface Contact {
   lastTalkedAt: number;
   chatExists: boolean;
 }
-
-export type ContactResponse = {
-  list: Contact[];
-  next?: string;
-};

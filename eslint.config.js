@@ -1,39 +1,32 @@
 import js from "@eslint/js";
-import tsPlugin from "@typescript-eslint/eslint-plugin";
-import tsParser from "@typescript-eslint/parser";
+import { defineConfig } from "eslint/config";
+import tseslint from "typescript-eslint";
 
-// ESLint v9 flat config using installed TS parser/plugin
-export default [
-  // Ignore build artifacts and deps
-  { ignores: ["dist", "node_modules", "**/*.test.ts"] },
-
-  // Base JS recommended rules
+export default defineConfig(
+  { ignores: ["dist", "coverage"] },
   js.configs.recommended,
-
-  // TypeScript files
+  tseslint.configs.strictTypeChecked,
+  tseslint.configs.stylisticTypeChecked,
   {
-    files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
-      parser: tsParser,
       parserOptions: {
-        ecmaVersion: "latest",
-        sourceType: "module",
+        projectService: {
+          allowDefaultProject: ["*.config.ts", "eslint.config.js"],
+        },
+        tsconfigRootDir: import.meta.dirname,
       },
-      // Define globals to avoid no-undef on standard globals like `console`
-      globals: {
-        console: "readonly",
-      },
-    },
-    plugins: {
-      "@typescript-eslint": tsPlugin,
-    },
-    rules: {
-      // Use the plugin's recommended rules
-      ...tsPlugin.configs.recommended.rules,
-      // Relax typing strictness: allow `any` as a warning instead of an error
-      "@typescript-eslint/no-explicit-any": "warn",
-      // TypeScript already handles undefined vars; disable core rule for TS files
-      "no-undef": "off",
     },
   },
-];
+  {
+    // Tests use non-null assertions and untyped `res.json()` results.
+    files: ["test/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-non-null-assertion": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+    },
+  },
+);

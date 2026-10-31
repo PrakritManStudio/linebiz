@@ -1,2 +1,1 @@
-export { LineWeb } from "./client";
-export { LineWebError, LineWebErrorCode, isLineWebError } from "./errors";
+export type * from "./types/index.js";

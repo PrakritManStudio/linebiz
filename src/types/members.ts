@@ -1,10 +1,6 @@
+/** A member of a group chat. */
 export interface Member {
   userId: string;
   name: string;
   iconHash: string;
-}
-
-export interface MemberListResponse {
-  list: Member[];
-  next?: string;
 }

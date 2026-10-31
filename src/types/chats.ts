@@ -1,3 +1,4 @@
+/** Profile of the chat partner (user or group). */
 export interface ChatProfile {
   groupId: string;
   name: string;
@@ -5,11 +6,13 @@ export interface ChatProfile {
   iconHash: string;
 }
 
+/** Origin of a chat event. */
 export interface MessageSource {
   chatId: string;
   userId: string;
 }
 
+/** The latest event of a chat. */
 export interface ChatEvent {
   type: string;
   timestamp: number;
@@ -17,6 +20,7 @@ export interface ChatEvent {
   message: unknown;
 }
 
+/** A chat room in the OA inbox. */
 export interface Chat {
   chatId: string;
   updatedAt: number;
@@ -39,9 +43,4 @@ export interface Chat {
   lastReadMessageId: string;
   chatType: "GROUP" | "USER" | "ROOM";
   status: "active" | "blocked";
-}
-
-export interface ChatsResponse {
-  list: Chat[];
-  next?: string;
 }

@@ -1,4 +1,5 @@
-export interface BotData {
+/** A LINE Official Account (bot) as listed for the signed-in user. */
+export interface Bot {
   botId: string;
   basicSearchId: string;
   name: string;
@@ -17,11 +18,7 @@ export interface BotData {
   offline: boolean;
 }
 
-export type BotsList = {
-  list: BotData[];
-  next?: string;
-};
-
-export interface Bot extends BotData {
+/** Detailed information about a single bot. */
+export interface BotDetail extends Bot {
   hasChatRoom: boolean;
 }
