@@ -210,7 +210,9 @@ const firstHundred = await client.contacts.list(botId).toArray({ maxItems: 100 }
 const twoPages = await client.chats.list(botId).toArray({ maxPages: 2 });
 
 // 4. cursor: resume from a saved cursor
-const resumed = await client.chats.list(botId, { cursor: page.nextCursor });
+if (page.nextCursor !== undefined) {
+  const resumed = await client.chats.list(botId, { cursor: page.nextCursor });
+}
 ```
 
 `Page<T>` has `data: T[]`, `nextCursor: string | undefined`, `raw` (the unmodified response body), `hasNextPage()` and `getNextPage()`. Pages are fetched sequentially. For `messages.list` the cursor is the `backward` cursor and following pages go further back in time. If the server returns a cursor that did not advance, the call rejects with an `UnexpectedResponseError` instead of looping forever.

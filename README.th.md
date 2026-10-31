@@ -210,7 +210,9 @@ const firstHundred = await client.contacts.list(botId).toArray({ maxItems: 100 }
 const twoPages = await client.chats.list(botId).toArray({ maxPages: 2 });
 
 // 4. cursor: เริ่มต่อจาก cursor ที่บันทึกไว้
-const resumed = await client.chats.list(botId, { cursor: page.nextCursor });
+if (page.nextCursor !== undefined) {
+  const resumed = await client.chats.list(botId, { cursor: page.nextCursor });
+}
 ```
 
 `Page<T>` มี `data: T[]`, `nextCursor: string | undefined`, `raw` (response body ดั้งเดิม), `hasNextPage()` และ `getNextPage()` ดึงหน้าทีละหน้าตามลำดับ สำหรับ `messages.list` cursor คือ cursor แบบ `backward` และหน้าถัดไปจะย้อนเวลาไปเรื่อย ๆ หาก server คืน cursor ที่ไม่เดินหน้า การเรียกจะ reject ด้วย `UnexpectedResponseError` แทนการวนไม่รู้จบ
