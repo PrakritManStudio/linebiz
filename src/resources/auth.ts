@@ -23,7 +23,9 @@ export class AuthResource extends APIResource {
       options,
     );
     const logoutUri =
-      typeof raw === "object" && raw !== null ? (raw as { logoutUri?: unknown }).logoutUri : undefined;
+      typeof raw === "object" && raw !== null
+        ? (raw as { logoutUri?: unknown }).logoutUri
+        : undefined;
     if (typeof logoutUri !== "string" || logoutUri === "") {
       throw new UnexpectedResponseError('Expected "logoutUri" to be a string', { body: raw });
     }

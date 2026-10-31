@@ -57,9 +57,9 @@ describe("chats / messages / contacts / members / auth", () => {
 
   it("chats.list validates botId and tagIds", async () => {
     await expect(client(mockFetch()).chats.list("bad")).rejects.toBeInstanceOf(ValidationError);
-    await expect(client(mockFetch()).chats.list(BOT, { tagIds: ["bad id"] })).rejects.toBeInstanceOf(
-      ValidationError,
-    );
+    await expect(
+      client(mockFetch()).chats.list(BOT, { tagIds: ["bad id"] }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("messages.list uses backward cursor", async () => {
@@ -92,9 +92,9 @@ describe("chats / messages / contacts / members / auth", () => {
       messageId: "123",
       timestamp: "1700000000000",
     });
-    await expect(client(mockFetch()).messages.retrieveFlex(BOT, CHAT, "12a")).rejects.toBeInstanceOf(
-      ValidationError,
-    );
+    await expect(
+      client(mockFetch()).messages.retrieveFlex(BOT, CHAT, "12a"),
+    ).rejects.toBeInstanceOf(ValidationError);
     await expect(
       client(mockFetch()).messages.retrieveFlex(BOT, CHAT, "1", { timestamp: "x" }),
     ).rejects.toBeInstanceOf(ValidationError);

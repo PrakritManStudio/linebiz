@@ -62,7 +62,11 @@ export class Validator {
   idList(param: string, value: unknown): string[] {
     const items = requireStringArray(param, value);
     if (this.#strict && !items.every((item) => ID_LIST_ITEM_RE.test(item))) {
-      return fail(param, value, "must contain only IDs of letters, digits, hyphens and underscores");
+      return fail(
+        param,
+        value,
+        "must contain only IDs of letters, digits, hyphens and underscores",
+      );
     }
     return items;
   }
