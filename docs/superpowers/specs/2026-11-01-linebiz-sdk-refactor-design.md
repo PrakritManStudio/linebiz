@@ -237,7 +237,7 @@ assertEnum(param, value, allowed)
 | Package manager | pnpm `12.16.1` (`packageManager` field), `pnpm-lock.yaml`; ลบ `package-lock.json` |
 | Node | `engines.node: ">=22"`; CI matrix 22, 24, 26 |
 | Module | `"type": "module"`, ESM-only; `exports`: `"."` และ `"./types"` (types + import) และ `"./package.json"` |
-| TypeScript | ล่าสุด (7.x) — `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `isolatedDeclarations`, `erasableSyntaxOnly`, `module/moduleResolution: NodeNext`, `target/lib: ES2023` |
+| TypeScript | 6.0.x (TS 7 ใช้ไม่ได้: typescript-eslint 8.72 peer `typescript <6.1.0`) — `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `isolatedDeclarations`, `erasableSyntaxOnly`, `module/moduleResolution: NodeNext`, `target/lib: ES2023` |
 | Build | tsdown `0.23.x` (pin minor), `format: ["esm"]`, `dts: true`, `exports: true`, `publint: "ci-only"`, `attw: "ci-only"`, `failOnWarn: "ci-only"` |
 | Lint | ESLint 9 flat + typescript-eslint `strictTypeChecked` + `stylisticTypeChecked`; lint ไฟล์ test ด้วย |
 | Format | Prettier (คง config เดิม) |
@@ -291,6 +291,8 @@ assertEnum(param, value, allowed)
 | 4 | **Live verification & API capture:** ใช้ browser ล็อกอิน `chat.line.biz` / `manager.line.biz` (ผู้ใช้ล็อกอินเอง), ดักจับ network request, ตรวจว่า endpoint/รูปร่าง response ตรงกับ types, เพิ่ม/แก้ fixtures, รัน integration tests, ระบุ endpoint ใหม่ (เช่น manager) สำหรับรอบถัดไป | หลัง refactor เสร็จ — แยก task |
 
 ## 16. สิ่งที่ต้องยืนยันตอนเขียน implementation plan
+
+**ผลการยืนยัน (2026-11-01):** (1) tsdown 0.23.4 peer `typescript ^5||^6||^7` แต่ typescript-eslint 8.72.1 peer `<6.1.0` → ใช้ TypeScript 6.0.3 (5) pnpm 12 รองรับ trusted publishing + provenance ใน `pnpm publish`; `pnpm/action-setup@v6` อ่าน `packageManager` (2) ยืนยันด้วย build ใน Task 1 ของ plan (3)(4) ใช้ข้อมูลเดิม (6) ผู้ใช้ตั้งค่าบน npmjs.com ตอน rollout
 
 1. tsdown 0.23.x ทำงานกับ TypeScript 7.x (ถ้าไม่ได้ → ใช้ TS ล่าสุดที่รองรับ เช่น 5.9/6.x)
 2. tsdown inline type จาก devDependency `@line/bot-sdk` ลง `.d.ts` ได้จริงเมื่อเปิด `isolatedDeclarations` (ถ้าไม่ได้ → ตั้ง `deps.dts.alwaysBundle` หรือเขียน type เองเท่าที่ใช้)
