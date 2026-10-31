@@ -6,3 +6,5 @@ node_modules
 .DS_Store
 package-lock.json
 pnpm-lock.yaml
+
+THIRD_PARTY_NOTICES.md
