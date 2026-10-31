@@ -34,7 +34,9 @@ describe("Validator (strict)", () => {
 
   it("idList", () => {
     expect(v.idList("tagIds", ["abc", "123"])).toEqual(["abc", "123"]);
-    expect(() => v.idList("tagIds", ["ok", "bad-id"])).toThrow(ValidationError);
+    expect(v.idList("tagIds", ["123e4567-e89b-12d3-a456-426614174000", "a_b"])).toHaveLength(2);
+    expect(() => v.idList("tagIds", ["ok", "bad id"])).toThrow(ValidationError);
+    expect(() => v.idList("tagIds", [""])).toThrow(ValidationError);
     expect(() => v.idList("tagIds", "abc")).toThrow(ValidationError);
     expect(() => v.idList("tagIds", [1])).toThrow(ValidationError);
   });
