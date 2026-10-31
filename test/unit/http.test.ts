@@ -139,6 +139,7 @@ describe("HttpClient.request", () => {
       location: "https://evil.example/login",
     });
     expect(m.calls).toHaveLength(1);
+    expect(m.calls[0]!.redirect).toBe("manual");
   });
 
   it("allowRedirect resolves undefined on 3xx", async () => {
@@ -209,6 +210,53 @@ describe("HttpClient.request", () => {
       }),
     ).rejects.toBeInstanceOf(UnexpectedResponseError);
     expect(m.calls).toHaveLength(0);
+  });
+
+  it("onError fires once for pre-flight errors, without calling fetch", async () => {
+    const m = mockFetch();
+    const seen: {
+      url: string;
+      headers: Record<string, string>;
+      attempt: number;
+      error: unknown;
+    }[] = [];
+    await expect(
+      make({
+        fetch: m.fetch,
+        hooks: {
+          onError: (c) => {
+            seen.push(c);
+          },
+        },
+      }).request({
+        service: "account",
+        method: "GET",
+        path: "",
+        absoluteURL: "https://evil.example/",
+      }),
+    ).rejects.toBeInstanceOf(UnexpectedResponseError);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.error).toBeInstanceOf(UnexpectedResponseError);
+    expect(seen[0]).toMatchObject({ url: "https://evil.example/", headers: {}, attempt: 0 });
+    expect(m.calls).toHaveLength(0);
+  });
+
+  it("onError is not called for an error thrown by onRequest", async () => {
+    const errs: unknown[] = [];
+    const boom = new UnexpectedResponseError("from hook");
+    await expect(
+      make({
+        hooks: {
+          onRequest: () => {
+            throw boom;
+          },
+          onError: (c) => {
+            errs.push(c.error);
+          },
+        },
+      }).request(GET_CHAT),
+    ).rejects.toBe(boom);
+    expect(errs).toHaveLength(0);
   });
 
   it("absoluteURL on a LINE host is used as is", async () => {

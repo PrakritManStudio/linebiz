@@ -172,7 +172,9 @@ interface PreparedRequest {
 
 /** Mutable slot a single attempt fills so the caller can report the final error. */
 interface AttemptState {
-  ctx?: RequestContext;
+  ctx: RequestContext;
+  /** Error thrown by the caller's own `onRequest` hook; it must not trigger `onError`. */
+  hookError?: { error: unknown };
 }
 
 /** HTTP pipeline shared by every resource: URL, headers, cookies, hooks and error mapping. */
@@ -194,18 +196,32 @@ export class HttpClient {
    * @throws {LineBizError} On any failure.
    */
   async request<T>(desc: RequestDescriptor, options: RequestOptions = {}): Promise<T> {
-    const prepared: PreparedRequest = {
-      desc,
-      options,
-      url: resolveURL(this.config, desc),
-      headers: buildHeaders(this.config, desc, options),
+    // Context reported to `onError` if the call fails before the request is fully built.
+    const state: AttemptState = {
+      ctx: {
+        method: desc.method,
+        url: desc.absoluteURL ?? this.config.baseURLs[desc.service] + desc.path,
+        headers: {},
+        attempt: 0,
+      },
     };
-    const state: AttemptState = {};
     try {
+      const headers = buildHeaders(this.config, desc, options);
+      const prepared: PreparedRequest = {
+        desc,
+        options,
+        url: resolveURL(this.config, desc),
+        headers,
+      };
+      state.ctx = {
+        ...state.ctx,
+        url: prepared.url.toString(),
+        headers: redactHeaders(Object.fromEntries(headers)),
+      };
       return await this.attempt<T>(prepared, 0, state);
     } catch (error) {
-      const ctx = state.ctx;
-      if (ctx !== undefined && isLineBizError(error)) {
+      if (isLineBizError(error) && state.hookError?.error !== error) {
+        const ctx = state.ctx;
         await safeHook(() => this.config.hooks.onError?.({ ...ctx, error }));
       }
       throw error;
@@ -232,8 +248,13 @@ export class HttpClient {
       headers: redactHeaders(Object.fromEntries(headers)),
       attempt,
     };
-    await config.hooks.onRequest?.(ctx);
     state.ctx = ctx;
+    try {
+      await config.hooks.onRequest?.(ctx);
+    } catch (error) {
+      state.hookError = { error };
+      throw error;
+    }
 
     const init: RequestInit = { method, headers, redirect: "manual" };
     if (desc.body !== undefined) init.body = JSON.stringify(desc.body);
