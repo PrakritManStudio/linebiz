@@ -29,4 +29,5 @@ export interface Contact {
   chatAvailable: boolean;
   lastTalkedAt: number;
   chatExists: boolean;
+  assignedBizId?: string;
 }

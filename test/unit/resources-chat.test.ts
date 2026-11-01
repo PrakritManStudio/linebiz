@@ -8,6 +8,9 @@ import { messagesPageFixture } from "../fixtures/messages.js";
 import { BOT, CHAT, USER, client } from "../helpers/client.js";
 import { json, mockFetch } from "../helpers/mock-fetch.js";
 
+const csrfToken = (): Response =>
+  json({ headerName: "X-XSRF-TOKEN", parameterName: "_csrf", token: "tok" });
+
 describe("chats / messages / contacts / members / auth", () => {
   it("chats.list query shape", async () => {
     const m = mockFetch(json(chatsPageFixture));
@@ -31,11 +34,11 @@ describe("chats / messages / contacts / members / auth", () => {
       folderType: "UNREAD",
       prioritizePinned: false,
       limit: 5,
-      tagIds: ["a-b", "c_d"],
+      tagIds: ["ab", "cd"],
     });
     expect(Object.fromEntries(new URL(m.calls[1]!.url).searchParams)).toEqual({
       folderType: "UNREAD",
-      tagIds: "a-b,c_d",
+      tagIds: "ab,cd",
       autoTagIds: "",
       limit: "5",
       prioritizePinnedChat: "false",
@@ -174,26 +177,31 @@ describe("chats / messages / contacts / members / auth", () => {
 
   it("auth.logout calls logoutUri on account host without following redirects", async () => {
     const m = mockFetch(
+      json({ headerName: "X-XSRF-TOKEN", parameterName: "_csrf", token: "tok" }),
       json({ logoutUri: "https://account.line.biz/logout?x=1" }),
       new Response(null, { status: 302, headers: { location: "https://access.line.me/" } }),
     );
     await client(m).auth.logout();
-    expect(m.calls[0]!.method).toBe("POST");
-    expect(m.calls[0]!.url).toContain("/api/v1/logoutUri");
-    expect(await m.calls[0]!.json()).toEqual({ redirectPath: "/" });
-    expect(m.calls[1]!.method).toBe("GET");
-    expect(m.calls[1]!.url).toBe("https://account.line.biz/logout?x=1");
-    expect(m.calls).toHaveLength(2);
+    expect(m.calls).toHaveLength(3);
+    expect(m.calls[0]!.method).toBe("GET");
+    expect(m.calls[0]!.url).toContain("/api/v1/csrfToken");
+    expect(m.calls[1]!.method).toBe("POST");
+    expect(m.calls[1]!.url).toContain("/api/v1/logoutUri");
+    expect(m.calls[1]!.headers.get("x-xsrf-token")).toBe("tok");
+    expect(await m.calls[1]!.json()).toEqual({ redirectPath: "/" });
+    expect(m.calls[2]!.method).toBe("GET");
+    expect(m.calls[2]!.url).toBe("https://account.line.biz/logout?x=1");
+    expect(m.calls[2]!.headers.has("x-xsrf-token")).toBe(false);
   });
 
   it("auth.logout refuses foreign logoutUri", async () => {
-    const m = mockFetch(json({ logoutUri: "https://evil.example/" }));
+    const m = mockFetch(csrfToken(), json({ logoutUri: "https://evil.example/" }));
     await expect(client(m).auth.logout()).rejects.toBeInstanceOf(UnexpectedResponseError);
-    expect(m.calls).toHaveLength(1);
+    expect(m.calls).toHaveLength(2);
   });
 
   it("auth.logout missing logoutUri", async () => {
-    await expect(client(mockFetch(json({}))).auth.logout()).rejects.toBeInstanceOf(
+    await expect(client(mockFetch(csrfToken(), json({}))).auth.logout()).rejects.toBeInstanceOf(
       UnexpectedResponseError,
     );
   });

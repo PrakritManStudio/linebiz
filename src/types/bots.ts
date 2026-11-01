@@ -16,6 +16,7 @@ export interface Bot {
     planType: string;
   };
   offline: boolean;
+  chatGrade?: string;
 }
 
 /** Detailed information about a single bot. */

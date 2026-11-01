@@ -1,3 +1,34 @@
+/** Kind of resource behind a sticker; unknown values are passed through as strings. */
+export type StickerResourceType =
+  "STATIC" | "ANIMATION" | "SOUND" | "ANIMATION_SOUND" | (string & {});
+
+/** A user, or everyone, mentioned in a text message. */
+export type Mentionee =
+  | {
+      /** Start index of the mention in the text. */
+      index: number;
+      /** Length of the mention in the text. */
+      length: number;
+      /** The mention targets the account itself or everyone. */
+      type: "self" | "all";
+    }
+  | {
+      /** Start index of the mention in the text. */
+      index: number;
+      /** Length of the mention in the text. */
+      length: number;
+      /** The mention targets a specific user. */
+      type: "user";
+      /** LINE user ID of the mentioned user. */
+      userId: string;
+    };
+
+/** Mentions contained in a text message. */
+export interface Mention {
+  /** Mentioned targets. */
+  mentionees: Mentionee[];
+}
+
 /** Event emitted when a chat is marked as read. */
 export interface ChatReadEvent {
   type: "chatRead";
@@ -94,7 +125,7 @@ export interface MessageReceivedEvent {
         quoteToken?: string;
         packageId: string;
         stickerId: string;
-        stickerResourceType: "STATIC" | "ANIMATION_SOUND";
+        stickerResourceType: StickerResourceType;
         type: "sticker";
       }
     | {
@@ -109,14 +140,7 @@ export interface MessageReceivedEvent {
           productId: string;
           emojiId: string;
         }[];
-        mention?: {
-          mentionees: {
-            index: number;
-            length: number;
-            userId: string;
-            type: "user";
-          }[];
-        };
+        mention?: Mention;
       };
 }
 
@@ -161,14 +185,7 @@ export interface MessageSentEvent {
           productId: string;
           emojiId: string;
         }[];
-        mention?: {
-          mentionees: {
-            index: number;
-            length: number;
-            userId: string;
-            type: "user";
-          }[];
-        };
+        mention?: Mention;
         quotedMessageId?: string;
       }
     | {
@@ -176,7 +193,7 @@ export interface MessageSentEvent {
         quoteToken?: string;
         packageId: string;
         stickerId: string;
-        stickerResourceType: "ANIMATION_SOUND";
+        stickerResourceType: StickerResourceType;
         type: "sticker";
       }
     | {
@@ -249,10 +266,30 @@ export interface MemberJoinedEvent {
   source: {
     chatId: string;
   };
-  left: {
+  joined: {
     members: {
       userId: string;
     }[];
+  };
+}
+
+/** A user followed (added) the account. */
+export interface FollowEvent {
+  type: "follow";
+  timestamp: number;
+  source: {
+    chatId: string;
+    userId: string;
+  };
+}
+
+/** A user unfollowed (blocked or removed) the account. */
+export interface UnfollowEvent {
+  type: "unfollow";
+  timestamp: number;
+  source: {
+    chatId: string;
+    userId: string;
   };
 }
 
@@ -265,4 +302,6 @@ export type MessageEvent =
   | LeaveEvent
   | JoinEvent
   | MemberLeftEvent
-  | MemberJoinedEvent;
+  | MemberJoinedEvent
+  | FollowEvent
+  | UnfollowEvent;

@@ -1,7 +1,7 @@
 import { ValidationError } from "./errors.js";
 
 const ID_RE = /^[A-Za-z0-9]{33}$/;
-const ID_LIST_ITEM_RE = /^[A-Za-z0-9_-]+$/;
+const ID_LIST_ITEM_RE = /^[A-Za-z0-9]+$/;
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const DIGITS_RE = /^[0-9]+$/;
 
@@ -54,7 +54,7 @@ export class Validator {
   }
 
   /**
-   * Validates an array of IDs made of letters, digits, hyphens and underscores (tagIds).
+   * Validates an array of alphanumeric IDs (tagIds).
    * @param param Parameter name used in the error.
    * @param value Value to check.
    * @returns The validated list.
@@ -62,11 +62,7 @@ export class Validator {
   idList(param: string, value: unknown): string[] {
     const items = requireStringArray(param, value);
     if (this.#strict && !items.every((item) => ID_LIST_ITEM_RE.test(item))) {
-      return fail(
-        param,
-        value,
-        "must contain only IDs of letters, digits, hyphens and underscores",
-      );
+      return fail(param, value, "must contain only IDs of letters and digits");
     }
     return items;
   }

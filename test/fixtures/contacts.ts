@@ -1,5 +1,5 @@
 import type { Contact } from "../../src/types/index.js";
-import { CHAT_ID, TAG_ID, USER_ID } from "./ids.js";
+import { BIZ_ID, CHAT_ID, TAG_ID, USER_ID } from "./ids.js";
 
 export const contactsPageFixture: { list: Contact[]; next?: string } = {
   list: [
@@ -22,6 +22,7 @@ export const contactsPageFixture: { list: Contact[]; next?: string } = {
       chatAvailable: true,
       lastTalkedAt: 1700000000000,
       chatExists: true,
+      assignedBizId: BIZ_ID,
     },
     {
       contactId: CHAT_ID,

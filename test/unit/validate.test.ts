@@ -34,7 +34,11 @@ describe("Validator (strict)", () => {
 
   it("idList", () => {
     expect(v.idList("tagIds", ["abc", "123"])).toEqual(["abc", "123"]);
-    expect(v.idList("tagIds", ["123e4567-e89b-12d3-a456-426614174000", "a_b"])).toHaveLength(2);
+    expect(v.idList("tagIds", ["a1b2c3d4e5f6g7h8i9j0k1l2m3"])).toHaveLength(1);
+    expect(() => v.idList("tagIds", ["123e4567-e89b-12d3-a456-426614174000"])).toThrow(
+      ValidationError,
+    );
+    expect(() => v.idList("tagIds", ["a_b"])).toThrow(/letters and digits/);
     expect(() => v.idList("tagIds", ["ok", "bad id"])).toThrow(ValidationError);
     expect(() => v.idList("tagIds", [""])).toThrow(ValidationError);
     expect(() => v.idList("tagIds", "abc")).toThrow(ValidationError);
@@ -84,7 +88,7 @@ describe("Validator (non-strict)", () => {
     expect(loose.id("botId", "short")).toBe("short");
     expect(loose.int("limit", 5000, { min: 1, max: 25 })).toBe(5000);
     expect(loose.oneOf("order", "asc", ["ASC"] as const)).toBe("asc");
-    expect(loose.idList("tagIds", ["bad-id"])).toEqual(["bad-id"]);
+    expect(loose.idList("tagIds", ["bad-id", "a_b"])).toEqual(["bad-id", "a_b"]);
     expect(loose.uuidList("bizIds", ["nope"])).toEqual(["nope"]);
     expect(loose.digits("messageId", "12a")).toBe("12a");
     expect(() => loose.id("botId", 1)).toThrow(ValidationError);

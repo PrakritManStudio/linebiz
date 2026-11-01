@@ -15,6 +15,7 @@ const bot: Bot = {
   unreadCount: 0,
   plan: { code: "free", planType: "FREE" },
   offline: false,
+  chatGrade: "GRADE_A",
 };
 
 export const botsPageFixture: { list: Bot[]; next?: string } = {

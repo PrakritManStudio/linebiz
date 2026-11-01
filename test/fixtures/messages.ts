@@ -20,6 +20,35 @@ export const messagesPageFixture: { list: MessageEvent[]; backward?: string } = 
       message: { id: MESSAGE_ID, type: "text", text: "hello" },
     },
     {
+      type: "message",
+      timestamp,
+      source,
+      message: {
+        id: MESSAGE_ID,
+        type: "text",
+        text: "@All @Bot @Fake hi",
+        mention: {
+          mentionees: [
+            { index: 0, length: 4, type: "all" },
+            { index: 5, length: 4, type: "self" },
+            { index: 10, length: 5, type: "user", userId: USER_ID },
+          ],
+        },
+      },
+    },
+    {
+      type: "message",
+      timestamp,
+      source,
+      message: {
+        id: MESSAGE_ID,
+        type: "sticker",
+        packageId: "11537",
+        stickerId: "52002734",
+        stickerResourceType: "STATIC",
+      },
+    },
+    {
       type: "messageSent",
       timestamp,
       source,
@@ -45,8 +74,10 @@ export const messagesPageFixture: { list: MessageEvent[]; backward?: string } = 
       type: "memberJoined",
       timestamp,
       source: { chatId: CHAT_ID },
-      left: { members: [{ userId: USER_ID }] },
+      joined: { members: [{ userId: USER_ID }] },
     },
+    { type: "follow", timestamp, source },
+    { type: "unfollow", timestamp, source },
   ],
   backward: "fake-backward-cursor",
 };
