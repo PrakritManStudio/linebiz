@@ -327,16 +327,16 @@ if (bot) {
 
 repository มีชุดทดสอบแบบ read-only ที่เรียกบริการจริง โดยจะถูกข้ามหากไม่ได้ตั้งค่าผ่าน environment variable:
 
-| ตัวแปร            | จำเป็น | คำอธิบาย                                                      |
-| ----------------- | ------ | ------------------------------------------------------------- |
-| `LINEBIZ_COOKIES` | ใช่    | session cookie (รูปแบบใดก็ได้ที่รองรับ)                       |
-| `LINEBIZ_BOT_ID`  | ไม่    | Bot ID เปิดใช้เทสต์ที่ต้องใช้ bot (`chats.list`, `tags.list`) |
+| ตัวแปร            | จำเป็น | คำอธิบาย                                                                                  |
+| ----------------- | ------ | ----------------------------------------------------------------------------------------- |
+| `LINEBIZ_COOKIES` | ใช่    | session cookie (รูปแบบใดก็ได้ที่รองรับ)                                                   |
+| `LINEBIZ_BOT_ID`  | ไม่    | Bot ID เปิดใช้เทสต์ที่ผูกกับ bot (bots, chats, tags, owners, contacts, messages, members) |
 
 ```sh
 LINEBIZ_COOKIES='name1=value1; name2=value2' LINEBIZ_BOT_ID=<your bot id> pnpm test:integration
 ```
 
-หากไม่มี `LINEBIZ_COOKIES` ทุกเทสต์จะถูกข้ามและคำสั่งจบด้วย exit code 0 ชุดทดสอบนี้ไม่เรียก `auth.logout()` ห้าม commit cookie; ไฟล์ `.env*` ถูก git ignore ไว้แล้ว
+หากไม่มี `LINEBIZ_COOKIES` ทุกเทสต์จะถูกข้ามและคำสั่งจบด้วย exit code 0 ชุดทดสอบนี้ไม่เรียก `auth.logout()` ใส่ค่าในไฟล์ `.env` ได้ (คัดลอกจาก `.env.example`) ระบบจะโหลดให้อัตโนมัติและไฟล์นี้ถูก git ignore ไว้แล้ว ห้าม commit cookie
 
 ## License
 

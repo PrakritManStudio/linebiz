@@ -1,8 +1,12 @@
 name: Release
 
+# Manual-only until the first release is published and npm Trusted Publishing is configured.
+# To re-enable automatic releases, replace with:
+#   on:
+#     push:
+#       branches: [main]
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 concurrency: release
 

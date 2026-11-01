@@ -327,16 +327,16 @@ Note that `me.retrieve()` returns a `localStorageEncryptionKey` field; treat the
 
 The repository has a read-only live test suite that talks to the real service. It is skipped unless you provide credentials through environment variables:
 
-| Variable          | Required | Description                                                           |
-| ----------------- | -------- | --------------------------------------------------------------------- |
-| `LINEBIZ_COOKIES` | yes      | Session cookies (any accepted input form)                             |
-| `LINEBIZ_BOT_ID`  | no       | Bot ID, enables the tests that need a bot (`chats.list`, `tags.list`) |
+| Variable          | Required | Description                                                                                   |
+| ----------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `LINEBIZ_COOKIES` | yes      | Session cookies (any accepted input form)                                                     |
+| `LINEBIZ_BOT_ID`  | no       | Bot ID, enables the bot-scoped tests (bots, chats, tags, owners, contacts, messages, members) |
 
 ```sh
 LINEBIZ_COOKIES='name1=value1; name2=value2' LINEBIZ_BOT_ID=<your bot id> pnpm test:integration
 ```
 
-Without `LINEBIZ_COOKIES` every test is skipped and the command exits with code 0. The suite never calls `auth.logout()`. Do not commit cookies; `.env*` files are git-ignored.
+Without `LINEBIZ_COOKIES` every test is skipped and the command exits with code 0. The suite never calls `auth.logout()`. Values can also live in a `.env` file (copy `.env.example`); it is loaded automatically and is git-ignored. Do not commit cookies.
 
 ## License
 
