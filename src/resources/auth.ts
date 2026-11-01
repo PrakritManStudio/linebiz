@@ -39,5 +39,7 @@ export class AuthResource extends APIResource {
       },
       options,
     );
+    // The session is gone, so its CSRF token is too.
+    http.clearCsrfToken();
   }
 }

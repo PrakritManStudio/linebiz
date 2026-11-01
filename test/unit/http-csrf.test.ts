@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { APIError, PermissionDeniedError, UnexpectedResponseError } from "../../src/core/errors.js";
+import {
+  APIError,
+  AbortError,
+  ConfigError,
+  PermissionDeniedError,
+  UnexpectedResponseError,
+} from "../../src/core/errors.js";
 import type { ErrorContext, RequestContext } from "../../src/core/http.js";
+import { client } from "../helpers/client.js";
 import { make } from "../helpers/make-http.js";
 import { json, mockFetch } from "../helpers/mock-fetch.js";
 
@@ -144,6 +151,22 @@ describe("automatic CSRF token", () => {
     const http = make({ fetch: m.fetch, hooks: { onError: (ctx) => void errors.push(ctx) } });
     await expect(http.request(POST)).rejects.toBeInstanceOf(APIError);
     expect(errors).toHaveLength(1);
+    expect(errors[0]!.method).toBe("POST");
+    expect(errors[0]!.url).toContain("/api/v1/things");
+  });
+
+  it("gives each concurrent writer one onError with its own write context when the token fetch fails", async () => {
+    const m = mockFetch(json({}, { status: 500 }));
+    const errors: ErrorContext[] = [];
+    const http = make({ fetch: m.fetch, hooks: { onError: (ctx) => void errors.push(ctx) } });
+    const results = await Promise.allSettled([http.request(POST), http.request(POST)]);
+    expect(results.map((r) => r.status)).toEqual(["rejected", "rejected"]);
+    expect(m.calls).toHaveLength(1);
+    expect(errors).toHaveLength(2);
+    for (const ctx of errors) {
+      expect(ctx.method).toBe("POST");
+      expect(ctx.url).toContain("/api/v1/things");
+    }
   });
 
   it("does not report an onRequest hook error as an onError event", async () => {
@@ -226,5 +249,126 @@ describe("automatic CSRF token", () => {
     }).request(POST);
     expect(m.calls[1]!.headers.get("x-custom-csrf")).toBe(secret);
     for (const entry of seen) expect(entry).not.toContain(secret);
+  });
+
+  it("redacts a custom CSRF header in the onError context when the call fails before the attempt builds it", async () => {
+    const secret = "SECRET-PRE-ATTEMPT";
+    const m = mockFetch(csrf(secret, "X-Custom-Csrf"), json({}));
+    let cookieCalls = 0;
+    const errors: ErrorContext[] = [];
+    const http = make({
+      fetch: m.fetch,
+      cookieStore: { getCookieHeader: () => (++cookieCalls <= 2 ? "ses=S" : "a=1\nb") },
+      hooks: { onError: (ctx) => void errors.push(ctx) },
+    });
+    await http.request(POST);
+    await expect(http.request(POST)).rejects.toBeInstanceOf(ConfigError);
+    expect(errors).toHaveLength(1);
+    expect(JSON.stringify(errors[0])).not.toContain(secret);
+    expect(errors[0]!.headers["X-Custom-Csrf"] ?? errors[0]!.headers["x-custom-csrf"]).toBe(
+      "[REDACTED]",
+    );
+  });
+
+  it("redacts a cached custom CSRF token when the signal is already aborted", async () => {
+    const secret = "SECRET-ABORTED";
+    const m = mockFetch(csrf(secret, "X-Custom-Csrf"), json({}));
+    const errors: ErrorContext[] = [];
+    const http = make({ fetch: m.fetch, hooks: { onError: (ctx) => void errors.push(ctx) } });
+    await http.request(POST);
+    const ac = new AbortController();
+    ac.abort();
+    await expect(http.request(POST, { signal: ac.signal })).rejects.toBeInstanceOf(AbortError);
+    expect(errors).toHaveLength(1);
+    expect(JSON.stringify(errors[0])).not.toContain(secret);
+  });
+
+  describe("shared token fetch and caller signals", () => {
+    const gated = (): { release: () => void; responder: (req: Request) => Promise<Response> } => {
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return {
+        release,
+        // Like a real fetch, give up when the request signal fires.
+        responder: (req: Request) =>
+          new Promise<Response>((resolve, reject) => {
+            req.signal.addEventListener(
+              "abort",
+              () => {
+                reject(req.signal.reason as Error);
+              },
+              { once: true },
+            );
+            void gate.then(() => {
+              resolve(csrf("tok"));
+            });
+          }),
+      };
+    };
+    const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it("does not fail writer B when only writer A aborts during the shared fetch", async () => {
+      const g = gated();
+      const m = mockFetch(g.responder, json({ ok: true }));
+      const http = make({ fetch: m.fetch });
+      const acA = new AbortController();
+      const a = http.request(POST, { signal: acA.signal });
+      const b = http.request<{ ok: boolean }>(POST);
+      const aResult = a.catch((e: unknown) => e);
+      await tick();
+      acA.abort();
+      expect(await aResult).toBeInstanceOf(AbortError);
+      g.release();
+      expect(await b).toEqual({ ok: true });
+      expect(m.calls.map((c) => c.method)).toEqual(["GET", "POST"]);
+    });
+
+    it("rejects waiter B promptly with AbortError while A still succeeds", async () => {
+      const g = gated();
+      const m = mockFetch(g.responder, json({ ok: true }));
+      const http = make({ fetch: m.fetch });
+      const a = http.request<{ ok: boolean }>(POST);
+      const acB = new AbortController();
+      const b = http.request(POST, { signal: acB.signal });
+      await tick();
+      acB.abort();
+      await expect(b).rejects.toBeInstanceOf(AbortError);
+      g.release();
+      expect(await a).toEqual({ ok: true });
+      expect(m.calls.map((c) => c.method)).toEqual(["GET", "POST"]);
+    });
+
+    it("is not cut short by a short per-call timeout of the first writer", async () => {
+      const g = gated();
+      const m = mockFetch(g.responder, json({ ok: true }));
+      const http = make({ fetch: m.fetch });
+      const a = http.request<{ ok: boolean }>(POST, { timeout: 5 });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      g.release();
+      expect(await a).toEqual({ ok: true });
+    });
+  });
+
+  it("refetches the token after auth.logout() clears the cache", async () => {
+    const m = mockFetch(
+      csrf("tok-1"),
+      json({ logoutUri: "https://account.line.biz/logout" }),
+      new Response(null, { status: 302, headers: { location: "https://access.line.me/" } }),
+      csrf("tok-2"),
+      json({}),
+    );
+    const c = client(m);
+    await c.auth.logout();
+    await c._http.request(POST);
+    expect(m.calls.map((call) => new URL(call.url).pathname)).toEqual([
+      TOKEN_PATH,
+      "/api/v1/logoutUri",
+      "/logout",
+      TOKEN_PATH,
+      "/api/v1/things",
+    ]);
+    expect(m.calls[4]!.headers.get("x-xsrf-token")).toBe("tok-2");
   });
 });

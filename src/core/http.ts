@@ -46,7 +46,11 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Timeout override in milliseconds. */
   timeout?: number;
-  /** Extra headers; take precedence over client-level headers. */
+  /**
+   * Extra headers; take precedence over client-level headers. For chat write requests an
+   * `X-XSRF-TOKEN` header makes the SDK skip its automatic CSRF token fetch; only that exact
+   * name (any case) is recognised for the shortcut.
+   */
   headers?: Record<string, string>;
 }
 
@@ -56,7 +60,7 @@ export interface RequestContext {
   method: string;
   /** Full request URL. */
   url: string;
-  /** Outgoing headers with `cookie` redacted. */
+  /** Outgoing headers with `cookie` and CSRF token values redacted. */
   headers: Record<string, string>;
   /** Zero-based attempt number. */
   attempt: number;
@@ -299,6 +303,41 @@ function parseCsrfToken(raw: unknown): CsrfToken {
   return { headerName, token };
 }
 
+function abortError(desc: RequestDescriptor, url: URL, cause?: unknown): AbortError {
+  return new AbortError(`Request aborted: ${desc.method} ${url.toString()}`, { cause });
+}
+
+/**
+ * Wait for `promise`, but reject as soon as `signal` aborts. The promise itself is not cancelled,
+ * so other waiters on it are unaffected.
+ */
+async function raceAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+  onAbort: () => AbortError,
+): Promise<T> {
+  if (signal === undefined) return promise;
+  let cleanup = (): void => undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    const fail = (): void => {
+      reject(onAbort());
+    };
+    if (signal.aborted) {
+      fail();
+      return;
+    }
+    signal.addEventListener("abort", fail, { once: true });
+    cleanup = () => {
+      signal.removeEventListener("abort", fail);
+    };
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    cleanup();
+  }
+}
+
 /** Mutable slot a single attempt fills so the caller can report the final error. */
 interface AttemptState {
   ctx: RequestContext;
@@ -314,7 +353,7 @@ export class HttpClient {
   /** CSRF token shared by all writes of this client; cleared when its fetch fails or it is rejected. */
   #csrf: Promise<CsrfToken> | undefined;
 
-  /** Errors already passed to `onError` (or deliberately not reported), so nested calls report once. */
+  /** Errors thrown by a caller's `onRequest` hook inside a nested call; they never reach `onError`. */
   readonly #settled = new WeakSet<object>();
 
   /** @param config Resolved client configuration. */
@@ -330,7 +369,21 @@ export class HttpClient {
    * @returns The parsed JSON body, or `undefined` for an empty body (or an allowed redirect).
    * @throws {LineBizError} On any failure.
    */
-  async request<T>(desc: RequestDescriptor, options: RequestOptions = {}): Promise<T> {
+  request<T>(desc: RequestDescriptor, options: RequestOptions = {}): Promise<T> {
+    return this.#send<T>(desc, options, true);
+  }
+
+  /**
+   * Forget the cached CSRF token so the next chat write fetches a new one (e.g. after sign-out).
+   *
+   * @internal
+   */
+  clearCsrfToken(): void {
+    this.#csrf = undefined;
+  }
+
+  /** {@link HttpClient.request}; `report: false` keeps an internal call from firing `onError`. */
+  async #send<T>(desc: RequestDescriptor, options: RequestOptions, report: boolean): Promise<T> {
     // Context reported to `onError` if the call fails before the request is fully built.
     const state: AttemptState = {
       ctx: {
@@ -374,8 +427,10 @@ export class HttpClient {
       let csrfResent = false;
       let csrfUsed: Promise<CsrfToken> | undefined;
       const applyCsrf = async (): Promise<void> => {
-        csrfUsed = this.#csrf ?? this.#fetchCsrf(options);
-        const { headerName, token } = await csrfUsed;
+        csrfUsed = this.#csrf ?? this.#fetchCsrf();
+        const { headerName, token } = await raceAbort(csrfUsed, options.signal, () =>
+          abortError(desc, prepared.url, options.signal?.reason),
+        );
         if (callerHeaders.has(headerName.toLowerCase())) {
           csrfManaged = false;
           return;
@@ -388,7 +443,10 @@ export class HttpClient {
       state.ctx = {
         ...state.ctx,
         url: prepared.url.toString(),
-        headers: redactHeaders(Object.fromEntries(headers)),
+        headers: redactHeaders(
+          Object.fromEntries(headers),
+          prepared.csrfHeader === undefined ? [] : [prepared.csrfHeader],
+        ),
       };
       const sleep = this.config.sleep ?? defaultSleep;
       for (let n = 0; ; n++) {
@@ -423,10 +481,11 @@ export class HttpClient {
         }
       }
     } catch (error) {
-      // A nested call (the CSRF token fetch) may already have reported or swallowed this error.
-      const handled = typeof error === "object" && error !== null && this.#settled.has(error);
-      if (typeof error === "object" && error !== null) this.#settled.add(error);
-      if (isLineBizError(error) && !handled && state.hookError?.error !== error) {
+      // A hook error thrown inside the nested CSRF fetch reaches the writers as a plain error.
+      const hookError = state.hookError?.error === error;
+      if (hookError && typeof error === "object" && error !== null) this.#settled.add(error);
+      const settled = typeof error === "object" && error !== null && this.#settled.has(error);
+      if (report && isLineBizError(error) && !hookError && !settled) {
         const ctx = state.ctx;
         await safeHook(() => this.config.hooks.onError?.({ ...ctx, error }));
       }
@@ -434,14 +493,16 @@ export class HttpClient {
     }
   }
 
-  /** Start (and cache) a CSRF token fetch through the regular pipeline. */
-  #fetchCsrf(options: RequestOptions): Promise<CsrfToken> {
-    const callOptions: RequestOptions = {};
-    if (options.signal !== undefined) callOptions.signal = options.signal;
-    if (options.timeout !== undefined) callOptions.timeout = options.timeout;
-    const promise = this.request<unknown>(
+  /**
+   * Start (and cache) a CSRF token fetch through the regular pipeline. The fetch is shared by every
+   * waiting writer, so it uses neither a caller's signal nor a caller's timeout, and its failures are
+   * reported by each writer's own `onError` rather than by the fetch itself.
+   */
+  #fetchCsrf(): Promise<CsrfToken> {
+    const promise = this.#send<unknown>(
       { service: "chat", method: "GET", path: CSRF_TOKEN_PATH },
-      callOptions,
+      {},
+      false,
     ).then(parseCsrfToken);
     this.#csrf = promise;
     promise.catch(() => {
