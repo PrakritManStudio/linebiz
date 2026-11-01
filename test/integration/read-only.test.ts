@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { LineBizClient } from "../../src/client.js";
-import type { Chat } from "../../src/types/index.js";
+import type { Chat, MessageEvent } from "../../src/types/index.js";
 
 // Live, read-only checks against chat.line.biz. Skipped unless LINEBIZ_COOKIES is set.
 // Values may come from the shell or from a git-ignored `.env` file (see `.env.example`).
@@ -10,6 +10,19 @@ try {
 } catch {
   // No .env file — fall back to the shell environment.
 }
+
+const EVENT_TYPES = [
+  "chatRead",
+  "message",
+  "messageSent",
+  "unsend",
+  "join",
+  "leave",
+  "memberJoined",
+  "memberLeft",
+  "follow",
+  "unfollow",
+] as const satisfies readonly MessageEvent["type"][];
 
 const cookies = process.env.LINEBIZ_COOKIES;
 const botId = process.env.LINEBIZ_BOT_ID;
@@ -46,6 +59,12 @@ describe.skipIf(!cookies)("live read-only", () => {
 
     it("chats.list first page", () => {
       expect(Array.isArray(chats)).toBe(true);
+      for (const chat of chats) {
+        const profile = chat.profile as unknown as Record<string, unknown>;
+        expect(typeof profile.userId === "string" || typeof profile.groupId === "string").toBe(
+          true,
+        );
+      }
     });
 
     it("tags.list", async () => {
@@ -66,6 +85,15 @@ describe.skipIf(!cookies)("live read-only", () => {
       if (!chat) return ctx.skip();
       const page = await client.messages.list(bot, chat.chatId);
       expect(Array.isArray(page.data)).toBe(true);
+    });
+
+    it("messages event types are known", async (ctx) => {
+      const chat = chats[0];
+      if (!chat) return ctx.skip();
+      const page = await client.messages.list(bot, chat.chatId);
+      const known: readonly string[] = EVENT_TYPES;
+      const unknown = page.data.map((event) => event.type).filter((type) => !known.includes(type));
+      expect(unknown).toEqual([]);
     });
 
     it("members.list of the first group/room chat", async (ctx) => {
