@@ -77,7 +77,12 @@ describe("retry", () => {
     const { sleep } = recordingSleep();
     const m = mockFetch(json({}, { status: 503 }));
     await expect(
-      make({ fetch: m.fetch, maxRetries: 2, sleep }).request({ ...GET, method: "POST" }),
+      make({
+        fetch: m.fetch,
+        maxRetries: 2,
+        sleep,
+        headers: { "X-XSRF-TOKEN": "t" },
+      }).request({ ...GET, method: "POST" }),
     ).rejects.toBeInstanceOf(InternalServerError);
     expect(m.calls).toHaveLength(1);
   });

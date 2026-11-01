@@ -76,7 +76,7 @@ describe("HttpClient.request", () => {
 
   it("POST sends JSON body", async () => {
     const m = mockFetch(json({}));
-    await make({ fetch: m.fetch }).request({
+    await make({ fetch: m.fetch, headers: { "X-XSRF-TOKEN": "t" } }).request({
       service: "chat",
       method: "POST",
       path: "/p",

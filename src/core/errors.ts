@@ -24,6 +24,12 @@ export type LineBizErrorCode = (typeof LineBizErrorCode)[keyof typeof LineBizErr
 const BRAND: symbol = Symbol.for("linebiz.error");
 const MAX_BODY_LENGTH = 2000;
 const REDACTED = "[REDACTED]";
+const SENSITIVE_HEADERS: ReadonlySet<string> = new Set([
+  "cookie",
+  "set-cookie",
+  "x-xsrf-token",
+  "x-csrf-token",
+]);
 
 /** Base class of every error thrown by this SDK. */
 export class LineBizError extends Error {
@@ -273,16 +279,22 @@ export function isLineBizError(value: unknown): value is LineBizError {
 }
 
 /**
- * Return a copy of `headers` with `cookie` and `set-cookie` values replaced by `"[REDACTED]"`.
+ * Return a copy of `headers` with `cookie`, `set-cookie` and CSRF token values (`x-xsrf-token`,
+ * `x-csrf-token`, plus any `extraNames`) replaced by `"[REDACTED]"`.
  *
  * @param headers Header map.
+ * @param extraNames Additional header names to redact (case-insensitive), e.g. a custom CSRF header.
  * @returns A new, redacted header map.
  */
-export function redactHeaders(headers: Record<string, string>): Record<string, string> {
+export function redactHeaders(
+  headers: Record<string, string>,
+  extraNames: readonly string[] = [],
+): Record<string, string> {
+  const extra = extraNames.map((name) => name.toLowerCase());
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     const lower = key.toLowerCase();
-    out[key] = lower === "cookie" || lower === "set-cookie" ? REDACTED : value;
+    out[key] = SENSITIVE_HEADERS.has(lower) || extra.includes(lower) ? REDACTED : value;
   }
   return out;
 }

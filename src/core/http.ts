@@ -263,12 +263,40 @@ function isRetryable(error: unknown): boolean {
   return error instanceof APIError && isRetryableStatus(error.status);
 }
 
-/** Everything about a call that stays constant across attempts. */
+/** Header the chat service expects the CSRF token in, unless `/api/v1/csrfToken` names another. */
+const DEFAULT_CSRF_HEADER = "x-xsrf-token";
+const CSRF_TOKEN_PATH = "/api/v1/csrfToken";
+
+/** CSRF header name and token as returned by `GET /api/v1/csrfToken`. */
+interface CsrfToken {
+  headerName: string;
+  token: string;
+}
+
+/** Everything about a call that stays constant across attempts (the CSRF header aside). */
 interface PreparedRequest {
   desc: RequestDescriptor;
   options: RequestOptions;
   url: URL;
   headers: Headers;
+  /** Name of the CSRF header currently set on `headers`; its value is redacted in hook contexts. */
+  csrfHeader?: string;
+}
+
+/** Validate the `/api/v1/csrfToken` body without ever quoting it. */
+function parseCsrfToken(raw: unknown): CsrfToken {
+  const invalid = (): UnexpectedResponseError =>
+    new UnexpectedResponseError("Invalid CSRF token response");
+  if (typeof raw !== "object" || raw === null) throw invalid();
+  const { headerName, token } = raw as { headerName?: unknown; token?: unknown };
+  if (typeof headerName !== "string" || typeof token !== "string") throw invalid();
+  if (headerName === "" || token === "") throw invalid();
+  try {
+    new Headers([[headerName, token]]);
+  } catch {
+    throw invalid();
+  }
+  return { headerName, token };
 }
 
 /** Mutable slot a single attempt fills so the caller can report the final error. */
@@ -282,6 +310,12 @@ interface AttemptState {
 export class HttpClient {
   /** Resolved configuration. */
   readonly config: HttpConfig;
+
+  /** CSRF token shared by all writes of this client; cleared when its fetch fails or it is rejected. */
+  #csrf: Promise<CsrfToken> | undefined;
+
+  /** Errors already passed to `onError` (or deliberately not reported), so nested calls report once. */
+  readonly #settled = new WeakSet<object>();
 
   /** @param config Resolved client configuration. */
   constructor(config: HttpConfig) {
@@ -326,6 +360,31 @@ export class HttpClient {
         url: resolveURL(this.config, desc),
         headers,
       };
+      // Chat writes need the session's CSRF token unless the caller supplied one themselves.
+      const callerHeaders = new Set(
+        [...Object.keys(this.config.headers), ...Object.keys(options.headers ?? {})].map((name) =>
+          name.toLowerCase(),
+        ),
+      );
+      let csrfManaged =
+        desc.method !== "GET" &&
+        desc.service === "chat" &&
+        desc.absoluteURL === undefined &&
+        !callerHeaders.has(DEFAULT_CSRF_HEADER);
+      let csrfResent = false;
+      let csrfUsed: Promise<CsrfToken> | undefined;
+      const applyCsrf = async (): Promise<void> => {
+        csrfUsed = this.#csrf ?? this.#fetchCsrf(options);
+        const { headerName, token } = await csrfUsed;
+        if (callerHeaders.has(headerName.toLowerCase())) {
+          csrfManaged = false;
+          return;
+        }
+        if (prepared.csrfHeader !== undefined) headers.delete(prepared.csrfHeader);
+        headers.set(headerName, token);
+        prepared.csrfHeader = headerName;
+      };
+      if (csrfManaged) await applyCsrf();
       state.ctx = {
         ...state.ctx,
         url: prepared.url.toString(),
@@ -336,6 +395,19 @@ export class HttpClient {
         try {
           return await this.attempt<T>(prepared, n, state);
         } catch (error) {
+          if (
+            csrfManaged &&
+            !csrfResent &&
+            error instanceof APIError &&
+            error.status === 403 &&
+            state.hookError?.error !== error
+          ) {
+            // The server rejected the write before running it, so one resend with a fresh token is safe.
+            csrfResent = true;
+            if (this.#csrf === csrfUsed) this.#csrf = undefined;
+            await applyCsrf();
+            continue;
+          }
           const retry =
             desc.method === "GET" &&
             n < this.config.maxRetries &&
@@ -351,7 +423,10 @@ export class HttpClient {
         }
       }
     } catch (error) {
-      if (isLineBizError(error) && state.hookError?.error !== error) {
+      // A nested call (the CSRF token fetch) may already have reported or swallowed this error.
+      const handled = typeof error === "object" && error !== null && this.#settled.has(error);
+      if (typeof error === "object" && error !== null) this.#settled.add(error);
+      if (isLineBizError(error) && !handled && state.hookError?.error !== error) {
         const ctx = state.ctx;
         await safeHook(() => this.config.hooks.onError?.({ ...ctx, error }));
       }
@@ -359,9 +434,25 @@ export class HttpClient {
     }
   }
 
+  /** Start (and cache) a CSRF token fetch through the regular pipeline. */
+  #fetchCsrf(options: RequestOptions): Promise<CsrfToken> {
+    const callOptions: RequestOptions = {};
+    if (options.signal !== undefined) callOptions.signal = options.signal;
+    if (options.timeout !== undefined) callOptions.timeout = options.timeout;
+    const promise = this.request<unknown>(
+      { service: "chat", method: "GET", path: CSRF_TOKEN_PATH },
+      callOptions,
+    ).then(parseCsrfToken);
+    this.#csrf = promise;
+    promise.catch(() => {
+      if (this.#csrf === promise) this.#csrf = undefined;
+    });
+    return promise;
+  }
+
   /** Perform exactly one attempt; {@link HttpClient.request} wraps it in the retry loop. */
   private async attempt<T>(
-    { desc, options, url, headers: baseHeaders }: PreparedRequest,
+    { desc, options, url, headers: baseHeaders, csrfHeader }: PreparedRequest,
     attempt: number,
     state: AttemptState,
   ): Promise<T> {
@@ -410,7 +501,10 @@ export class HttpClient {
     const ctx: RequestContext = {
       method,
       url: urlString,
-      headers: redactHeaders(Object.fromEntries(headers)),
+      headers: redactHeaders(
+        Object.fromEntries(headers),
+        csrfHeader === undefined ? [] : [csrfHeader],
+      ),
       attempt,
     };
     state.ctx = ctx;
