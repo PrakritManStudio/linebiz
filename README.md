@@ -181,6 +181,8 @@ For paginated calls the options apply to every page request. Header precedence: 
 
 **Retries.** Only `GET` requests are retried, and only after a network error, a timeout, or HTTP 408 / 429 / 5xx. The delay is exponential backoff (`min(0.5s * 2^attempt, 8s)`, +/-25% jitter); when a retryable response carries a `Retry-After` header (any of 408 / 429 / 5xx; seconds or HTTP date, capped at 60 s), that delay is used instead. Aborting with your own `AbortSignal` is never retried, and `POST` requests (such as `auth.logout()`) are never retried.
 
+**CSRF.** Write requests to the chat service (`POST`, such as `auth.logout()`) need the session's CSRF token. The SDK fetches it from `GET /api/v1/csrfToken` on first use, caches it per client and sends it in the header the server names (`X-XSRF-TOKEN`); you do not need to do anything. If the server answers `403`, the token is refreshed and the write is resent once (the request was rejected before it ran, so this is safe and does not count towards `maxRetries`). A `X-XSRF-TOKEN` header you pass in `headers` is used as is and nothing is fetched.
+
 **Derived clients.** `client.withOptions({ ... })` returns a new client with some options changed (anything except `cookies` / `cookieStore`); the original is untouched and the cookie store is shared. The merge is **shallow**: a `headers`, `baseURLs` or `hooks` object you pass replaces the original object instead of being merged into it.
 
 ```ts
@@ -238,7 +240,7 @@ Every error extends `LineBizError` and has a machine-readable `code` (the `LineB
 | `RateLimitError`          | `RATE_LIMITED`                                            | HTTP 429 (extends `APIError`); `.retryAfter` in ms, or `undefined`                                                                  |
 | `InternalServerError`     | `SERVER_ERROR`                                            | HTTP 5xx (extends `APIError`)                                                                                                       |
 
-`APIError.body` is the parsed JSON when possible, otherwise the response text truncated to 2,000 characters. Cookies never appear in error messages or fields: `cookie` and `set-cookie` headers are replaced with `"[REDACTED]"`.
+`APIError.body` is the parsed JSON when possible, otherwise the response text truncated to 2,000 characters. Cookies never appear in error messages or fields: `cookie`, `set-cookie` and CSRF token headers (`x-xsrf-token`) are replaced with `"[REDACTED]"`.
 
 ```ts
 import { AuthenticationError, LineBizErrorCode, isLineBizError } from "@prakrit_m/linebiz";
@@ -258,7 +260,7 @@ try {
 
 ## Hooks
 
-Hooks are for logging and metrics. Their context never contains cookie values (`cookie` / `set-cookie` are redacted).
+Hooks are for logging and metrics. Their context never contains cookie values (`cookie` / `set-cookie` and the CSRF token header are redacted).
 
 ```ts
 const client = new LineBizClient({
@@ -292,7 +294,7 @@ All current endpoints use the `chat` service (`chat.line.biz`). Paginated method
 | `bots.list({ limit?, cursor? })`                                                  | `PagePromise<Bot>`          | `limit` 1-1000 (default 1000)                                                                                                                                                                                  |
 | `bots.retrieve(botId)`                                                            | `Promise<BotDetail>`        |                                                                                                                                                                                                                |
 | `owners.list(botId, { bizIds? })`                                                 | `Promise<Owner[]>`          | `bizIds`: list of UUIDs                                                                                                                                                                                        |
-| `tags.list(botId, { tagIds? })`                                                   | `Promise<Tag[]>`            | `tagIds`: letters, digits, `-`, `_`                                                                                                                                                                            |
+| `tags.list(botId, { tagIds? })`                                                   | `Promise<Tag[]>`            | `tagIds`: letters and digits                                                                                                                                                                                   |
 | `chats.list(botId, { limit?, tagIds?, folderType?, prioritizePinned?, cursor? })` | `PagePromise<Chat>`         | `limit` 1-25 (default 25); `folderType` default `"ALL"`; `prioritizePinned` default `true`                                                                                                                     |
 | `messages.list(botId, chatId, { cursor? })`                                       | `PagePromise<MessageEvent>` | Newest first; cursor goes backward in time                                                                                                                                                                     |
 | `messages.retrieveFlex(botId, chatId, messageId, { timestamp? })`                 | `Promise<FlexContainer>`    | `messageId` / `timestamp`: digit strings                                                                                                                                                                       |

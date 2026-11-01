@@ -181,6 +181,8 @@ await client.bots.retrieve(botId, { signal: controller.signal, timeout: 5_000 })
 
 **Retry** retry เฉพาะ request `GET` และเฉพาะเมื่อเกิด network error, timeout หรือ HTTP 408 / 429 / 5xx ระยะหน่วงเป็น exponential backoff (`min(0.5s * 2^attempt, 8s)` บวก/ลบ jitter 25%) และถ้า response ที่ retry ได้ (408 / 429 / 5xx) มี header `Retry-After` (วินาทีหรือ HTTP date, สูงสุด 60 วินาที) จะใช้ค่านั้นเป็นระยะหน่วงแทน การยกเลิกด้วย `AbortSignal` ของคุณจะไม่ถูก retry และ request `POST` (เช่น `auth.logout()`) จะไม่ถูก retry เลย
 
+**CSRF** request เขียน (`POST`) ไปยัง chat service เช่น `auth.logout()` ต้องใช้ CSRF token ของ session SDK จะดึง token จาก `GET /api/v1/csrfToken` เมื่อใช้ครั้งแรก เก็บแคชไว้ต่อ client และส่งใน header ที่เซิร์ฟเวอร์ระบุ (`X-XSRF-TOKEN`) โดยคุณไม่ต้องทำอะไร ถ้าเซิร์ฟเวอร์ตอบ `403` จะขอ token ใหม่แล้วส่ง request เขียนซ้ำ **หนึ่งครั้ง** (เซิร์ฟเวอร์ปฏิเสธก่อนประมวลผล จึงปลอดภัย และไม่นับรวมใน `maxRetries`) ถ้าคุณส่ง header `X-XSRF-TOKEN` ใน `headers` เอง จะใช้ค่านั้นตามที่ให้มาและไม่ดึง token
+
 **Client ที่ derive จากตัวเดิม** `client.withOptions({ ... })` คืน client ใหม่ที่เปลี่ยนบาง option (เปลี่ยนได้ทุกอย่างยกเว้น `cookies` / `cookieStore`) ตัวเดิมไม่ถูกแก้ไข และใช้ cookie store ร่วมกัน การ merge เป็นแบบ **shallow**: ถ้าส่งออบเจ็กต์ `headers`, `baseURLs` หรือ `hooks` มา ออบเจ็กต์นั้นจะ **แทนที่** ของเดิมทั้งก้อน ไม่ได้ merge เข้าด้วยกัน
 
 ```ts
@@ -238,7 +240,7 @@ if (page.nextCursor !== undefined) {
 | `RateLimitError`          | `RATE_LIMITED`                                            | HTTP 429 (สืบทอดจาก `APIError`); `.retryAfter` หน่วย ms หรือ `undefined`                                                      |
 | `InternalServerError`     | `SERVER_ERROR`                                            | HTTP 5xx (สืบทอดจาก `APIError`)                                                                                               |
 
-`APIError.body` เป็น JSON ที่ parse แล้วถ้าทำได้ มิฉะนั้นเป็นข้อความ response ที่ตัดไว้ไม่เกิน 2,000 ตัวอักษร cookie จะไม่ปรากฏใน message หรือ field ของ error: header `cookie` และ `set-cookie` ถูกแทนด้วย `"[REDACTED]"`
+`APIError.body` เป็น JSON ที่ parse แล้วถ้าทำได้ มิฉะนั้นเป็นข้อความ response ที่ตัดไว้ไม่เกิน 2,000 ตัวอักษร cookie จะไม่ปรากฏใน message หรือ field ของ error: header `cookie`, `set-cookie` และ header ของ CSRF token (`x-xsrf-token`) ถูกแทนด้วย `"[REDACTED]"`
 
 ```ts
 import { AuthenticationError, LineBizErrorCode, isLineBizError } from "@prakrit_m/linebiz";
@@ -258,7 +260,7 @@ try {
 
 ## Hooks
 
-Hooks ไว้ทำ logging และ metrics context ของ hook ไม่มีค่า cookie (`cookie` / `set-cookie` ถูก redact)
+Hooks ไว้ทำ logging และ metrics context ของ hook ไม่มีค่า cookie (`cookie` / `set-cookie` และ header ของ CSRF token ถูก redact)
 
 ```ts
 const client = new LineBizClient({
@@ -292,7 +294,7 @@ endpoint ทั้งหมดในปัจจุบันอยู่บน s
 | `bots.list({ limit?, cursor? })`                                                  | `PagePromise<Bot>`          | `limit` 1-1000 (ค่าเริ่มต้น 1000)                                                                                                                                                                                  |
 | `bots.retrieve(botId)`                                                            | `Promise<BotDetail>`        |                                                                                                                                                                                                                    |
 | `owners.list(botId, { bizIds? })`                                                 | `Promise<Owner[]>`          | `bizIds`: รายการ UUID                                                                                                                                                                                              |
-| `tags.list(botId, { tagIds? })`                                                   | `Promise<Tag[]>`            | `tagIds`: ตัวอักษร ตัวเลข `-` `_`                                                                                                                                                                                  |
+| `tags.list(botId, { tagIds? })`                                                   | `Promise<Tag[]>`            | `tagIds`: ตัวอักษรและตัวเลขเท่านั้น                                                                                                                                                                                |
 | `chats.list(botId, { limit?, tagIds?, folderType?, prioritizePinned?, cursor? })` | `PagePromise<Chat>`         | `limit` 1-25 (ค่าเริ่มต้น 25); `folderType` เริ่มต้น `"ALL"`; `prioritizePinned` เริ่มต้น `true`                                                                                                                   |
 | `messages.list(botId, chatId, { cursor? })`                                       | `PagePromise<MessageEvent>` | ใหม่สุดก่อน; cursor ย้อนเวลา                                                                                                                                                                                       |
 | `messages.retrieveFlex(botId, chatId, messageId, { timestamp? })`                 | `Promise<FlexContainer>`    | `messageId` / `timestamp`: string ที่เป็นตัวเลขล้วน                                                                                                                                                                |
