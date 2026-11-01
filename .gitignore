@@ -34,3 +34,5 @@ coverage/
 # Ignore package lock files (optional)
 # package-lock.json
 # yarn.lock
+# Local agent scratch (captures, briefs, reports) — may contain sensitive data
+.superpowers/
