@@ -24,6 +24,11 @@ const EVENT_TYPES = [
   "unfollow",
 ] as const satisfies readonly MessageEvent["type"][];
 
+// Compile-time check: every `MessageEvent` type literal must be listed in EVENT_TYPES.
+const allEventTypesListed: Exclude<MessageEvent["type"], (typeof EVENT_TYPES)[number]> extends never
+  ? true
+  : never = true;
+
 const cookies = process.env.LINEBIZ_COOKIES;
 const botId = process.env.LINEBIZ_BOT_ID;
 
@@ -60,10 +65,9 @@ describe.skipIf(!cookies)("live read-only", () => {
     it("chats.list first page", () => {
       expect(Array.isArray(chats)).toBe(true);
       for (const chat of chats) {
-        const profile = chat.profile as unknown as Record<string, unknown>;
-        expect(typeof profile.userId === "string" || typeof profile.groupId === "string").toBe(
-          true,
-        );
+        const { profile } = chat;
+        const id = "userId" in profile ? profile.userId : profile.groupId;
+        expect(typeof id).toBe("string");
       }
     });
 
@@ -91,6 +95,7 @@ describe.skipIf(!cookies)("live read-only", () => {
       const chat = chats[0];
       if (!chat) return ctx.skip();
       const page = await client.messages.list(bot, chat.chatId);
+      expect(allEventTypesListed).toBe(true);
       const known: readonly string[] = EVENT_TYPES;
       const unknown = page.data.map((event) => event.type).filter((type) => !known.includes(type));
       expect(unknown).toEqual([]);
