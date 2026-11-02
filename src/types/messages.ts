@@ -35,6 +35,8 @@ export interface ChatReadEvent {
   timestamp: number;
   source: {
     chatId: string;
+    /** User ID; present in user chats, absent in group chats. */
+    userId?: string;
   };
   read: {
     watermark: number;
@@ -141,6 +143,11 @@ export interface MessageReceivedEvent {
           emojiId: string;
         }[];
         mention?: Mention;
+        /**
+         * Type the message was originally sent as, e.g. `"flex"`: the message is shown as text
+         * with its alt text, and the Flex container can be fetched with `messages.retrieveFlex`.
+         */
+        originalType?: string;
       };
 }
 
@@ -187,6 +194,11 @@ export interface MessageSentEvent {
         }[];
         mention?: Mention;
         quotedMessageId?: string;
+        /**
+         * Type the message was originally sent as, e.g. `"flex"`: the message is shown as text
+         * with its alt text, and the Flex container can be fetched with `messages.retrieveFlex`.
+         */
+        originalType?: string;
       }
     | {
         id: string;

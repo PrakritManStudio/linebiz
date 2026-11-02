@@ -79,6 +79,8 @@ export class MessagesResource extends APIResource {
         method: "GET",
         path: `/api/v1/bots/${encodeURIComponent(bot)}/chats/${encodeURIComponent(chat)}/messages/flexJson`,
         query: { messageId: message, timestamp },
+        // An unknown message yields a 500 that never succeeds on retry.
+        retry: false,
       },
       options,
     );

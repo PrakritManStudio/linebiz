@@ -33,7 +33,7 @@ export class MembersResource extends APIResource {
     const { _http: http, _validator: v } = this._client;
     return paginate<Member>(async (cursor) => {
       const bot = v.id("botId", botId);
-      const chat = v.id("chatId", chatId);
+      const chat = v.groupChatId("chatId", chatId);
       const limit = v.int("limit", params.limit ?? 100, { min: 1, max: 100 });
       let userIds: string[] | undefined;
       if (params.userIds !== undefined) {

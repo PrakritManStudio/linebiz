@@ -42,6 +42,16 @@ describe("retry", () => {
     expect(m.calls).toHaveLength(2);
   });
 
+  it("does not retry a GET whose descriptor sets retry: false", async () => {
+    const { delays, sleep } = recordingSleep();
+    const m = mockFetch(json({}, { status: 500 }), json({ ok: true }));
+    await expect(
+      make({ fetch: m.fetch, maxRetries: 2, sleep }).request({ ...GET, retry: false }),
+    ).rejects.toBeInstanceOf(InternalServerError);
+    expect(m.calls).toHaveLength(1);
+    expect(delays).toEqual([]);
+  });
+
   it("honours Retry-After on 429", async () => {
     const { delays, sleep } = recordingSleep();
     const m = mockFetch(json({}, { status: 429, headers: { "retry-after": "3" } }), json({}));

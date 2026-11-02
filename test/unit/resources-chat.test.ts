@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { UnexpectedResponseError, ValidationError } from "../../src/core/errors.js";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import { LineBizClient } from "../../src/client.js";
+import {
+  InternalServerError,
+  UnexpectedResponseError,
+  ValidationError,
+} from "../../src/core/errors.js";
+import type { ChatReadEvent, MessageEvent } from "../../src/types/index.js";
 import { chatsPageFixture } from "../fixtures/chats.js";
 import { contactsPageFixture } from "../fixtures/contacts.js";
 import { flexFixture } from "../fixtures/flex.js";
@@ -173,6 +179,74 @@ describe("chats / messages / contacts / members / auth", () => {
     await expect(
       client(mockFetch()).members.list(BOT, CHAT, { userIds: ["bad"] }),
     ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("message event types: originalType on text messages, optional userId on chatRead source", () => {
+    expectTypeOf<ChatReadEvent["source"]>().toEqualTypeOf<{ chatId: string; userId?: string }>();
+    const sent = messagesPageFixture.list.find(
+      (e): e is Extract<MessageEvent, { type: "messageSent" }> => e.type === "messageSent",
+    );
+    expect(sent).toBeDefined();
+    const flexSent = messagesPageFixture.list.some(
+      (e) =>
+        e.type === "messageSent" &&
+        e.message.type === "text" &&
+        e.message.originalType === "flex" &&
+        e.sendId === undefined &&
+        e.bizId === undefined,
+    );
+    expect(flexSent).toBe(true);
+    const received: Extract<MessageEvent, { type: "message" }>["message"] = {
+      id: "1",
+      type: "text",
+      text: "t",
+      originalType: "flex",
+    };
+    expect(received.type).toBe("text");
+  });
+
+  it("members.list rejects user chats (U...) before any request", async () => {
+    const m = mockFetch();
+    const err: unknown = await client(m)
+      .members.list(BOT, USER)
+      .then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+    expect(err).toBeInstanceOf(ValidationError);
+    expect(err).toMatchObject({
+      param: "chatId",
+      reason: 'members.list only supports group or room chats (chat IDs starting with "C" or "R")',
+    });
+    expect(m.calls).toHaveLength(0);
+  });
+
+  it("members.list accepts room chats (R...) and sends U chats with validate:false", async () => {
+    const room = "R" + "3".repeat(32);
+    const m = mockFetch(json(membersPageFixture), json(membersPageFixture));
+    await client(m).members.list(BOT, room);
+    expect(m.calls[0]!.url).toContain(`/chats/${room}/members?`);
+    const lenient = new LineBizClient({
+      cookies: "a=1",
+      fetch: m.fetch,
+      maxRetries: 0,
+      validate: false,
+    });
+    await lenient.members.list(BOT, USER);
+    expect(m.calls[1]!.url).toContain(`/chats/${USER}/members?`);
+  });
+
+  it("retrieveFlex does not retry a 500", async () => {
+    const m = mockFetch(json({}, { status: 500 }), json(flexFixture));
+    const retrying = new LineBizClient({
+      cookies: "a=1",
+      fetch: m.fetch,
+      maxRetries: 2,
+    });
+    await expect(retrying.messages.retrieveFlex(BOT, CHAT, "123")).rejects.toBeInstanceOf(
+      InternalServerError,
+    );
+    expect(m.calls).toHaveLength(1);
   });
 
   it("auth.logout calls logoutUri on account host without following redirects", async () => {

@@ -10,6 +10,13 @@ export const messagesPageFixture: { list: MessageEvent[]; backward?: string } = 
     {
       type: "chatRead",
       timestamp,
+      source,
+      read: { watermark: timestamp },
+    },
+    {
+      // Group chats omit userId.
+      type: "chatRead",
+      timestamp,
       source: { chatId: CHAT_ID },
       read: { watermark: timestamp },
     },
@@ -55,6 +62,18 @@ export const messagesPageFixture: { list: MessageEvent[]; backward?: string } = 
       message: { id: MESSAGE_ID, type: "text", text: "hi there" },
       sendId: "fake-send-id",
       bizId: BIZ_ID,
+    },
+    {
+      type: "messageSent",
+      timestamp,
+      source,
+      message: {
+        id: MESSAGE_ID,
+        type: "text",
+        quoteToken: "fake-quote-token",
+        text: "alt text of a flex message",
+        originalType: "flex",
+      },
     },
     {
       type: "unsend",

@@ -38,6 +38,8 @@ export interface RequestDescriptor {
   absoluteURL?: string;
   /** Resolve `undefined` on a 3xx response instead of failing. */
   allowRedirect?: boolean;
+  /** Set to `false` to disable retries for this request (internal; for endpoints where a retry is pointless). */
+  retry?: false;
 }
 
 /** Per-call options. */
@@ -468,6 +470,7 @@ export class HttpClient {
           }
           const retry =
             desc.method === "GET" &&
+            desc.retry !== false &&
             n < this.config.maxRetries &&
             state.hookError?.error !== error &&
             isRetryable(error);

@@ -54,6 +54,25 @@ export class Validator {
   }
 
   /**
+   * Validates a chat ID that must belong to a group or room chat (starts with "C" or "R").
+   * The prefix is only enforced in strict mode.
+   * @param param Parameter name used in the error.
+   * @param value Value to check.
+   * @returns The validated ID.
+   */
+  groupChatId(param: string, value: unknown): string {
+    const str = this.id(param, value);
+    if (this.#strict && !/^[CR]/.test(str)) {
+      return fail(
+        param,
+        value,
+        'members.list only supports group or room chats (chat IDs starting with "C" or "R")',
+      );
+    }
+    return str;
+  }
+
+  /**
    * Validates an array of alphanumeric IDs (tagIds).
    * @param param Parameter name used in the error.
    * @param value Value to check.
