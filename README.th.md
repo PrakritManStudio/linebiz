@@ -299,7 +299,7 @@ endpoint ทั้งหมดในปัจจุบันอยู่บน s
 | `messages.list(botId, chatId, { cursor? })`                                       | `PagePromise<MessageEvent>` | ใหม่สุดก่อน; cursor ย้อนเวลา                                                                                                                                                                                       |
 | `messages.retrieveFlex(botId, chatId, messageId, { timestamp? })`                 | `Promise<FlexContainer>`    | `messageId` / `timestamp`: string ที่เป็นตัวเลขล้วน                                                                                                                                                                |
 | `contacts.list(botId, { query?, filter?, sortBy?, order?, limit?, cursor? })`     | `PagePromise<Contact>`      | `limit` 1-100 (เริ่มต้น 20); `filter` `ALL \| FRIEND \| NOT_FRIEND \| GROUP \| SPAM` (เริ่มต้น `ALL`); `sortBy` `DISPLAY_NAME \| LAST_TALKED_AT` (เริ่มต้น `DISPLAY_NAME`); `order` `ASC \| DESC` (เริ่มต้น `ASC`) |
-| `members.list(botId, chatId, { userIds?, limit?, cursor? })`                      | `PagePromise<Member>`       | `limit` 1-100 (ค่าเริ่มต้น 100)                                                                                                                                                                                    |
+| `members.list(botId, chatId, { userIds?, limit?, cursor? })`                      | `PagePromise<Member>`       | `limit` 1-100 (ค่าเริ่มต้น 100); เฉพาะแชทกลุ่ม/ห้อง                                                                                                                                                                |
 | `auth.logout()`                                                                   | `Promise<void>`             | ออกจากระบบ web session; URL ล็อกเอาต์ต้องเป็น https `*.line.biz` / `*.line.me`                                                                                                                                     |
 
 ทุกเมธอดรับ `RequestOptions` เป็นพารามิเตอร์ตัวสุดท้ายด้วย เช่น `client.tags.list(botId, {}, { signal })`
@@ -324,6 +324,14 @@ if (bot) {
 ```
 
 หมายเหตุ: `me.retrieve()` คืน field `localStorageEncryptionKey` ให้ถือว่า response นี้เป็นข้อมูลอ่อนไหวและอย่าบันทึกลง log
+
+## หมายเหตุเรื่องพฤติกรรม (Behaviour notes)
+
+- **ID.** ID ของ user, group และ bot บน chat.line.biz เป็นคนละชุดกับ ID ของ Messaging API / `@line/bot-sdk` ห้ามนำมาปะปนกัน ส่วน message ID ใช้ร่วมกันได้ทั้งสองฝั่ง
+- **การหา Flex message.** Flex message ที่ส่งผ่าน Messaging API จะปรากฏในประวัติแชทเป็นข้อความ text ที่มี alt text ให้ตรวจด้วย `message.type === "text" && message.originalType === "flex"` แล้วเรียก `client.messages.retrieveFlex(botId, chatId, message.id)` (`timestamp` ไม่บังคับ) หาก message ID ไม่มีอยู่ server จะตอบ 500 ซึ่งจะไม่ถูก retry
+- **ลำดับข้อความ.** `messages.list` คืนข้อความใหม่สุดก่อน cursor (`backward`) จะย้อนไปหาข้อความที่เก่ากว่า และหน้าถัดจากข้อความเก่าสุดจะว่างเปล่า
+- **ผลลัพธ์ว่างและ error.** การค้นหาหรือกรองที่ไม่พบรายการจะคืน list ว่าง `messages.list` กับ `chatId` ที่ไม่รู้จักก็คืน list ว่างเช่นกัน (ไม่เกิด error) bot ที่ไม่รู้จักจะ reject ด้วย `NotFoundError` และ cursor ที่ไม่ถูกต้องหรือหมดอายุจะ reject ด้วย `APIError` (400) `members.list` ใช้ได้เฉพาะแชทกลุ่มและห้อง (ID ขึ้นต้นด้วย `C` หรือ `R`) หากส่ง ID ของแชทผู้ใช้จะถูก reject ด้วย `ValidationError` ก่อนส่ง request (ยกเว้นตั้ง `validate: false`)
+- **Session.** Session ไม่ถูกต่ออายุอัตโนมัติ และ cookie มักมีอายุไม่ถึงหนึ่งวัน เมื่อการเรียกถูก reject ด้วย `AuthenticationError` ที่มี `code` เป็น `SESSION_EXPIRED` ให้ล็อกอินใหม่แล้วสร้าง client ด้วย cookie ชุดใหม่
 
 ## Integration tests
 

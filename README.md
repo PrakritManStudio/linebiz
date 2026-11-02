@@ -299,7 +299,7 @@ All current endpoints use the `chat` service (`chat.line.biz`). Paginated method
 | `messages.list(botId, chatId, { cursor? })`                                       | `PagePromise<MessageEvent>` | Newest first; cursor goes backward in time                                                                                                                                                                     |
 | `messages.retrieveFlex(botId, chatId, messageId, { timestamp? })`                 | `Promise<FlexContainer>`    | `messageId` / `timestamp`: digit strings                                                                                                                                                                       |
 | `contacts.list(botId, { query?, filter?, sortBy?, order?, limit?, cursor? })`     | `PagePromise<Contact>`      | `limit` 1-100 (default 20); `filter` `ALL \| FRIEND \| NOT_FRIEND \| GROUP \| SPAM` (default `ALL`); `sortBy` `DISPLAY_NAME \| LAST_TALKED_AT` (default `DISPLAY_NAME`); `order` `ASC \| DESC` (default `ASC`) |
-| `members.list(botId, chatId, { userIds?, limit?, cursor? })`                      | `PagePromise<Member>`       | `limit` 1-100 (default 100)                                                                                                                                                                                    |
+| `members.list(botId, chatId, { userIds?, limit?, cursor? })`                      | `PagePromise<Member>`       | `limit` 1-100 (default 100); group/room chats only                                                                                                                                                             |
 | `auth.logout()`                                                                   | `Promise<void>`             | Signs the web session out; the logout URL must be an https `*.line.biz` / `*.line.me` address                                                                                                                  |
 
 Every method also accepts a trailing `RequestOptions`, for example `client.tags.list(botId, {}, { signal })`.
@@ -324,6 +324,14 @@ if (bot) {
 ```
 
 Note that `me.retrieve()` returns a `localStorageEncryptionKey` field; treat the response as sensitive and do not log it.
+
+## Behaviour notes
+
+- **IDs.** User, group and bot IDs on chat.line.biz are a different ID space from the Messaging API / `@line/bot-sdk` IDs; do not mix them. Message IDs are shared between both.
+- **Finding Flex messages.** A Flex message sent through the Messaging API appears in history as a text message that carries its alt text. Detect it with `message.type === "text" && message.originalType === "flex"`, then call `client.messages.retrieveFlex(botId, chatId, message.id)` (`timestamp` is optional). An unknown message ID answers with a 500, which is not retried.
+- **Message order.** `messages.list` returns the newest messages first; the cursor (`backward`) goes to older messages, and the page after the oldest is empty.
+- **Empty results and errors.** Searches and filters that match nothing return an empty list. `messages.list` with an unknown `chatId` also returns an empty list (no error). An unknown bot rejects with `NotFoundError`, and an invalid or expired cursor rejects with `APIError` (400). `members.list` is only for group and room chats (IDs starting with `C` or `R`); a user chat ID is rejected with `ValidationError` before any request is sent (unless `validate: false`).
+- **Sessions.** Sessions are not renewed automatically, and cookies typically last less than a day. When a call rejects with an `AuthenticationError` whose `code` is `SESSION_EXPIRED`, log in again and create a client with fresh cookies.
 
 ## Integration tests
 
