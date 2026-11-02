@@ -183,10 +183,6 @@ describe("chats / messages / contacts / members / auth", () => {
 
   it("message event types: originalType on text messages, optional userId on chatRead source", () => {
     expectTypeOf<ChatReadEvent["source"]>().toEqualTypeOf<{ chatId: string; userId?: string }>();
-    const sent = messagesPageFixture.list.find(
-      (e): e is Extract<MessageEvent, { type: "messageSent" }> => e.type === "messageSent",
-    );
-    expect(sent).toBeDefined();
     const flexSent = messagesPageFixture.list.some(
       (e) =>
         e.type === "messageSent" &&
@@ -196,6 +192,7 @@ describe("chats / messages / contacts / members / auth", () => {
         e.bizId === undefined,
     );
     expect(flexSent).toBe(true);
+    // Compile-time check: a received text message accepts `originalType`.
     const received: Extract<MessageEvent, { type: "message" }>["message"] = {
       id: "1",
       type: "text",

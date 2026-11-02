@@ -17,12 +17,14 @@ export interface MemberListParams {
 /** Members of a group chat. */
 export class MembersResource extends APIResource {
   /**
-   * Lists the members of a chat. The result can be awaited for the first page or iterated item by item.
+   * Lists the members of a group or room chat (not user chats). The result can be awaited for the first page or iterated item by item.
    * @param botId ID of the bot.
-   * @param chatId ID of the chat.
+   * @param chatId ID of the group or room chat (starts with "C" or "R").
    * @param params User filter, page size and starting cursor.
    * @param options Per-call options (the signal and timeout apply to every page).
    * @returns A promise of the first page that is also async-iterable.
+   * @throws {ValidationError} (as a rejection) if `chatId` is a user chat ID (starts with "U") and
+   * validation is strict (the default).
    */
   list(
     botId: string,
