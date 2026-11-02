@@ -101,6 +101,25 @@ describe.skipIf(!cookies)("live read-only", () => {
       expect(unknown).toEqual([]);
     });
 
+    it("retrieveFlex for a Flex message in history", async (ctx) => {
+      for (const chat of chats.slice(0, 10)) {
+        const page = await client.messages.list(bot, chat.chatId);
+        for (const event of page.data) {
+          if (
+            (event.type === "message" || event.type === "messageSent") &&
+            event.message.type === "text" &&
+            event.message.originalType === "flex"
+          ) {
+            const flex = await client.messages.retrieveFlex(bot, chat.chatId, event.message.id);
+            expect(typeof flex).toBe("object");
+            expect(["bubble", "carousel"]).toContain(flex.type);
+            return;
+          }
+        }
+      }
+      return ctx.skip();
+    });
+
     it("members.list of the first group/room chat", async (ctx) => {
       const chat = chats.find((c) => c.chatType === "GROUP" || c.chatType === "ROOM");
       if (!chat) return ctx.skip();
